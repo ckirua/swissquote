@@ -1,0 +1,25 @@
+# Provisioned ClickHouse datasource for Swissquote BBO.
+# Host / user / password expand from the grafana-server process environment
+# (systemd EnvironmentFile pointing at ~/.env — see apply-provisioning.sh).
+# Port 9000 = ClickHouse native TCP (CLICKHOUSE_PORT in ~/.env). Do not commit secrets.
+apiVersion: 1
+
+datasources:
+  - name: ClickHouse
+    uid: swissquote-clickhouse
+    type: grafana-clickhouse-datasource
+    access: proxy
+    isDefault: true
+    editable: false
+    jsonData:
+      host: ${CLICKHOUSE_HOST}
+      port: 9000
+      protocol: native
+      secure: false
+      username: ${CLICKHOUSE_USER}
+      defaultDatabase: swissquote
+      dialTimeout: "10"
+      queryTimeout: "60"
+      validateSql: false
+    secureJsonData:
+      password: ${CLICKHOUSE_PASSWORD}

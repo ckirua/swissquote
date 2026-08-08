@@ -1,0 +1,28 @@
+[Unit]
+Description=Swissquote BBO writer (ZMQ SUB to ClickHouse) @INSTALL_ROOT@
+After=network-online.target @FEED_UNIT@
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=@SERVICE_USER@
+Group=@SERVICE_USER@
+
+WorkingDirectory=@INSTALL_ROOT@
+EnvironmentFile=-@ENV_PATH@
+Environment=DOTENV_PATH=@ENV_PATH@
+ExecStart=@INSTALL_ROOT@/bin/swissquote-writer --config @CONFIG_PATH@
+
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+
+KillSignal=SIGTERM
+KillMode=mixed
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=swissquote-writer@UNIT_SUFFIX@
+
+[Install]
+WantedBy=multi-user.target

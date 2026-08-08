@@ -1,0 +1,28 @@
+[Unit]
+Description=Swissquote BBO feed (ZMQ PUB)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=swissquote
+Group=swissquote
+
+WorkingDirectory=/home/swissquote/projects/swissquote
+EnvironmentFile=-/home/swissquote/.env
+ExecStart=/home/swissquote/.local/bin/swissquote-feed \
+    --config /home/swissquote/.config/service.toml
+
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+
+KillSignal=SIGTERM
+KillMode=mixed
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=swissquote-feed
+
+[Install]
+WantedBy=multi-user.target

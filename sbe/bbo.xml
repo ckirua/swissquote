@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<sbe:messageSchema xmlns:sbe="http://fixprotocol.io/2016/sbe"
+                   package="swissquote.bbo"
+                   id="1"
+                   version="1"
+                   semanticVersion="1.0.0"
+                   byteOrder="littleEndian"
+                   description="Swissquote multi-venue BBO snapshot">
+
+    <types>
+        <composite name="messageHeader" description="SBE message header">
+            <type name="blockLength" primitiveType="uint16"/>
+            <type name="templateId" primitiveType="uint16"/>
+            <type name="schemaId" primitiveType="uint16"/>
+            <type name="version" primitiveType="uint16"/>
+        </composite>
+        <composite name="groupSizeEncoding" description="Repeating group dimensions">
+            <type name="blockLength" primitiveType="uint16"/>
+            <type name="numInGroup" primitiveType="uint16"/>
+        </composite>
+        <composite name="varAsciiEncoding" description="Variable-length ASCII string">
+            <type name="length" primitiveType="uint32" maxValue="65536"/>
+            <type name="varData" primitiveType="uint8" length="0" characterEncoding="ASCII"/>
+        </composite>
+        <type name="TimestampMs" primitiveType="uint64"/>
+        <type name="Price" primitiveType="double"/>
+        <type name="Spread" primitiveType="float"/>
+    </types>
+
+    <sbe:message name="BboSnapshot" id="1" description="One instrument snapshot per HTTP poll">
+        <field name="symbol" id="1" type="varAsciiEncoding"/>
+        <field name="fetchTimeMs" id="2" type="TimestampMs"/>
+        <group name="venues" id="3" dimensionType="groupSizeEncoding">
+            <field name="platform" id="4" type="varAsciiEncoding"/>
+            <field name="server" id="5" type="varAsciiEncoding"/>
+            <field name="venueTsMs" id="6" type="TimestampMs"/>
+            <group name="profiles" id="7" dimensionType="groupSizeEncoding">
+                <field name="spreadProfile" id="8" type="varAsciiEncoding"/>
+                <field name="bid" id="9" type="Price"/>
+                <field name="ask" id="10" type="Price"/>
+                <field name="bidSpread" id="11" type="Spread"/>
+                <field name="askSpread" id="12" type="Spread"/>
+            </group>
+        </group>
+    </sbe:message>
+</sbe:messageSchema>

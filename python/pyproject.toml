@@ -1,0 +1,35 @@
+[build-system]
+requires = [
+    "setuptools",
+    "wheel",
+    "Cython",
+    "picobuild",
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "swissquote"
+description = "Swissquote Python client — Cython decode, ZMQ subscribe, ClickHouse queries"
+readme = "README.md"
+requires-python = ">=3.14"
+dynamic = ["version"]
+dependencies = [
+    "picop>=2.0.0",
+    "httpx",
+    "pyzmq",
+    "Cython",
+    "picobuild",
+    "setuptools",
+]
+
+[project.optional-dependencies]
+databases = [
+    "clickhouse-driver",
+    "python-dotenv",
+]
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.dynamic]
+version = { attr = "swissquote.__about__.__version__" }

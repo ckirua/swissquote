@@ -1,0 +1,30 @@
+# Copy to ~/.config/service.toml
+# Secrets (CLICKHOUSE_HOST, CLICKHOUSE_PASSWORD, …) belong in ~/.env only.
+# Do not add host or password under [clickhouse] here.
+#
+# C++ writer uses ClickHouse HTTP (port 8123 by default). Override with
+# CLICKHOUSE_HTTP_PORT in ~/.env if needed.
+
+[zmq]
+host = "127.0.0.1"
+port = 5559
+
+[logging]
+level = "INFO"
+log_dir = "/home/swissquote/.local/log"
+
+# Skip swissquote-feed REST polls during FX weekend:
+# Fri 16:55 → Sun 16:50 America/New_York (DST-safe). Writer stays up.
+[feed]
+weekend_pause = true
+
+[writer]
+batch_size = 5000
+batch_interval_sec = 0.1
+ch_database = "swissquote"
+ch_table = "bbo"
+async_insert = true
+
+[clickhouse]
+port = 9000
+user = "default"

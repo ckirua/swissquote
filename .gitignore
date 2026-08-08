@@ -1,0 +1,19 @@
+# Secrets / local env
+.env
+.env.*
+!.env.example
+!.env*.example
+
+# Python
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+*.egg-info/
+.venv/
+venv/
+*.so
+
+# Build artifacts
+cpp/build/
+dist/
+build/

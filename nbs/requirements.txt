@@ -1,0 +1,8 @@
+# Install alongside the Python client:
+#   cd ../python && pip install -e ".[databases]"
+#   cd ../nbs && pip install -r requirements.txt
+jupyterlab
+numpy
+pandas
+matplotlib
+seaborn

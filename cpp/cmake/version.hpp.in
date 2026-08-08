@@ -1,0 +1,3 @@
+#pragma once
+
+#define SWISSQUOTE_VERSION "@SWISSQUOTE_VERSION@"

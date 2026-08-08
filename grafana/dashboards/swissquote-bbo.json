@@ -1,0 +1,987 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 10,
+      "panels": [],
+      "title": "Price",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "swissquote-clickhouse"
+      },
+      "description": "Bid/ask/mid (1m last) on real timestamps \u2014 zoom and time picker work. Time axis session = hide NY weekend rows (line breaks across the gap); calendar = include them. Gaps >5m disconnect. Clean prices / Y min/max apply.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": true,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisGridShow": true,
+            "axisLabel": "Price",
+            "axisPlacement": "right",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": 300000,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "decimals": 5,
+          "mappings": [],
+          "max": "${y_max}",
+          "min": "${y_min}",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "bid"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "blue",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 1
+              },
+              {
+                "id": "displayName",
+                "value": "Bid"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "ask"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "orange",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 1
+              },
+              {
+                "id": "displayName",
+                "value": "Ask"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "mid"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 2
+              },
+              {
+                "id": "displayName",
+                "value": "Mid"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 14,
+        "w": 24,
+        "x": 0,
+        "y": 1
+      },
+      "id": 2,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "min",
+            "max"
+          ],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "swissquote-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 0,
+          "queryType": "sql",
+          "rawSql": "SELECT\n  toStartOfMinute(ts) AS time,\n  argMax(toFloat64(bid_price), ts) AS bid,\n  argMax(toFloat64(ask_price), ts) AS ask,\n  argMax(mid, ts) AS mid\nFROM (\n  SELECT ts, bid_price, ask_price, mid\n  FROM (\n    SELECT\n      ts,\n      bid_price,\n      ask_price,\n      mid,\n      median(mid) OVER (PARTITION BY toDate(ts)) AS day_med\n    FROM swissquote.bbo_mv\n    WHERE $__timeFilter_ms(ts)\n      AND symbol = '${symbol}'\n      AND spread_profile = '${spread_profile}'\n      AND ('${server}' = 'All' OR server = '${server}')\n      AND toFloat64(bid_price) > 0\n      AND toFloat64(ask_price) > 0\n      AND ask_price >= bid_price\n      AND (\n        '${axis}' = 'calendar'\n        OR NOT multiIf(\n          toDayOfWeek(toTimeZone(ts, 'America/New_York')) = 5,\n            (toHour(toTimeZone(ts, 'America/New_York')) * 60\n              + toMinute(toTimeZone(ts, 'America/New_York'))) >= 16 * 60 + 55,\n          toDayOfWeek(toTimeZone(ts, 'America/New_York')) = 6, 1,\n          toDayOfWeek(toTimeZone(ts, 'America/New_York')) = 7,\n            (toHour(toTimeZone(ts, 'America/New_York')) * 60\n              + toMinute(toTimeZone(ts, 'America/New_York'))) < 16 * 60 + 50,\n          0\n        )\n      )\n      AND (\n        '${clean}' = 'no'\n        OR (spread_bps IS NULL OR abs(spread_bps) < 100)\n      )\n  )\n  WHERE\n    '${clean}' = 'no'\n    OR (day_med > 0 AND abs(mid / day_med - 1) <= 0.05)\n)\nGROUP BY time\nORDER BY time",
+          "refId": "A"
+        }
+      ],
+      "title": "Bid / Ask / Mid (1m last)",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 15
+      },
+      "id": 11,
+      "panels": [],
+      "title": "Spread & ops",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "swissquote-clickhouse"
+      },
+      "description": "Absolute spread ask\u2212bid (1m last) plus EWMA over the EWMA span (min) variable. Same clean prices / weekend filters as Bid/Ask/Mid. Gaps >5m disconnect.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": true,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisGridShow": true,
+            "axisLabel": "Spread",
+            "axisPlacement": "right",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": 300000,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "decimals": 5,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "spread_abs"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Raw"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 1
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "spread_ewma"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "EWMA"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "dark-orange",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 3
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 15
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 16
+      },
+      "id": 5,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "mean",
+            "min",
+            "max"
+          ],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "swissquote-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 0,
+          "queryType": "sql",
+          "rawSql": "SELECT\n  time,\n  spread_abs,\n  exponentialMovingAverage(${ewma})(spread_abs, toFloat64(toUnixTimestamp(time)) / 60)\n    OVER (ORDER BY time ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS spread_ewma\nFROM (\n  SELECT\n    toStartOfMinute(ts) AS time,\n    argMax(toFloat64(spread_abs), ts) AS spread_abs\n  FROM (\n    SELECT ts, spread_abs, mid\n    FROM (\n      SELECT\n        ts,\n        spread_abs,\n        mid,\n        median(mid) OVER (PARTITION BY toDate(ts)) AS day_med\n      FROM swissquote.bbo_mv\n      WHERE $__timeFilter_ms(ts)\n        AND symbol = '${symbol}'\n        AND spread_profile = '${spread_profile}'\n        AND ('${server}' = 'All' OR server = '${server}')\n        AND toFloat64(bid_price) > 0\n        AND toFloat64(ask_price) > 0\n        AND ask_price >= bid_price\n        AND (\n        '${axis}' = 'calendar'\n        OR NOT multiIf(\n          toDayOfWeek(toTimeZone(ts, 'America/New_York')) = 5,\n            (toHour(toTimeZone(ts, 'America/New_York')) * 60\n              + toMinute(toTimeZone(ts, 'America/New_York'))) >= 16 * 60 + 55,\n          toDayOfWeek(toTimeZone(ts, 'America/New_York')) = 6, 1,\n          toDayOfWeek(toTimeZone(ts, 'America/New_York')) = 7,\n            (toHour(toTimeZone(ts, 'America/New_York')) * 60\n              + toMinute(toTimeZone(ts, 'America/New_York'))) < 16 * 60 + 50,\n          0\n        )\n      )\n        AND (\n          '${clean}' = 'no'\n          OR (spread_bps IS NULL OR abs(spread_bps) < 100)\n        )\n    )\n    WHERE\n      '${clean}' = 'no'\n      OR (day_med > 0 AND abs(mid / day_med - 1) <= 0.05)\n  )\n  GROUP BY time\n)\nORDER BY time",
+          "refId": "A"
+        }
+      ],
+      "title": "Spread abs + EWMA (1m)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "swissquote-clickhouse"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 15,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": 300000,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 24
+      },
+      "id": 1,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "swissquote-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 0,
+          "queryType": "sql",
+          "rawSql": "SELECT\n  toStartOfMinute(ts) AS time,\n  count() AS quote_rate\nFROM swissquote.bbo_mv\nWHERE $__timeFilter_ms(ts)\n  AND symbol = '${symbol}'\n  AND spread_profile = '${spread_profile}'\n  AND ('${server}' = 'All' OR server = '${server}')\nGROUP BY time\nORDER BY time",
+          "refId": "A"
+        }
+      ],
+      "title": "Quote rate (count / minute)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "swissquote-clickhouse"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "bps",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": 300000,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "decimals": 2,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 24
+      },
+      "id": 3,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "swissquote-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 0,
+          "queryType": "sql",
+          "rawSql": "SELECT\n  toStartOfMinute(ts) AS time,\n  quantile(0.5)(spread_bps) AS spread_bps_p50\nFROM swissquote.bbo_mv\nWHERE $__timeFilter_ms(ts)\n  AND symbol = '${symbol}'\n  AND spread_profile = '${spread_profile}'\n  AND ('${server}' = 'All' OR server = '${server}')\nGROUP BY time\nORDER BY time",
+          "refId": "A"
+        }
+      ],
+      "title": "Spread bps (1m median)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "swissquote-clickhouse"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 15,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": 300000,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 5000
+              },
+              {
+                "color": "red",
+                "value": 30000
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 24
+      },
+      "id": 4,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "swissquote-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 0,
+          "queryType": "sql",
+          "rawSql": "SELECT\n  toStartOfMinute(ingestion_time) AS time,\n  avg(dateDiff('ms', ts, ingestion_time)) AS ingestion_lag_ms\nFROM swissquote.bbo_mv\nWHERE $__timeFilter_ms(ingestion_time)\n  AND symbol = '${symbol}'\n  AND spread_profile = '${spread_profile}'\n  AND ('${server}' = 'All' OR server = '${server}')\n  AND (\n    '${clean_lag}' = 'no'\n    OR (\n      dateDiff('ms', ts, ingestion_time) >= 0\n      AND dateDiff('ms', ts, ingestion_time) < 60000\n    )\n  )\nGROUP BY time\nORDER BY time",
+          "refId": "A"
+        }
+      ],
+      "title": "Ingestion lag (avg ms)",
+      "type": "timeseries",
+      "description": "Avg ingestion_time \u2212 ts per minute. Clean lag=yes drops absurd outliers (\u226560s) so the axis stays in seconds-scale; set Clean lag=no to see raw spikes (can reach days)."
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": [
+    "swissquote",
+    "bbo",
+    "clickhouse"
+  ],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "selected": true,
+          "text": "EUR/USD",
+          "value": "EUR/USD"
+        },
+        "datasource": {
+          "type": "grafana-clickhouse-datasource",
+          "uid": "swissquote-clickhouse"
+        },
+        "definition": "SELECT DISTINCT symbol FROM swissquote.bbo_mv WHERE ts >= now64(3) - INTERVAL 7 DAY ORDER BY symbol",
+        "hide": 0,
+        "includeAll": false,
+        "label": "Symbol",
+        "multi": false,
+        "name": "symbol",
+        "options": [],
+        "query": "SELECT DISTINCT symbol FROM swissquote.bbo_mv WHERE ts >= now64(3) - INTERVAL 7 DAY ORDER BY symbol",
+        "refresh": 2,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "premium",
+          "value": "premium"
+        },
+        "datasource": {
+          "type": "grafana-clickhouse-datasource",
+          "uid": "swissquote-clickhouse"
+        },
+        "definition": "SELECT DISTINCT spread_profile FROM swissquote.bbo_mv WHERE ts >= now64(3) - INTERVAL 7 DAY AND spread_profile IN ('elite', 'premium', 'prime', 'standard') ORDER BY spread_profile",
+        "hide": 0,
+        "includeAll": false,
+        "label": "Spread profile",
+        "multi": false,
+        "name": "spread_profile",
+        "options": [],
+        "query": "SELECT DISTINCT spread_profile FROM swissquote.bbo_mv WHERE ts >= now64(3) - INTERVAL 7 DAY AND spread_profile IN ('elite', 'premium', 'prime', 'standard') ORDER BY spread_profile",
+        "refresh": 2,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "allValue": "All",
+        "current": {
+          "selected": true,
+          "text": "Live7",
+          "value": "Live7"
+        },
+        "datasource": {
+          "type": "grafana-clickhouse-datasource",
+          "uid": "swissquote-clickhouse"
+        },
+        "definition": "SELECT DISTINCT server FROM swissquote.bbo_mv WHERE ts >= now64(3) - INTERVAL 7 DAY ORDER BY server",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Server",
+        "multi": false,
+        "name": "server",
+        "options": [],
+        "query": "SELECT DISTINCT server FROM swissquote.bbo_mv WHERE ts >= now64(3) - INTERVAL 7 DAY ORDER BY server",
+        "refresh": 2,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "yes",
+          "value": "yes"
+        },
+        "hide": 0,
+        "includeAll": false,
+        "label": "Clean prices",
+        "multi": false,
+        "name": "clean",
+        "options": [
+          {
+            "selected": true,
+            "text": "yes",
+            "value": "yes"
+          },
+          {
+            "selected": false,
+            "text": "no",
+            "value": "no"
+          }
+        ],
+        "query": "yes,no",
+        "skipUrlSync": false,
+        "type": "custom"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "yes",
+          "value": "yes"
+        },
+        "hide": 0,
+        "includeAll": false,
+        "label": "Clean lag",
+        "multi": false,
+        "name": "clean_lag",
+        "options": [
+          {
+            "selected": true,
+            "text": "yes",
+            "value": "yes"
+          },
+          {
+            "selected": false,
+            "text": "no",
+            "value": "no"
+          }
+        ],
+        "query": "yes,no",
+        "skipUrlSync": false,
+        "type": "custom"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "hide (session)",
+          "value": "session"
+        },
+        "hide": 0,
+        "includeAll": false,
+        "label": "Weekends",
+        "multi": false,
+        "name": "axis",
+        "options": [
+          {
+            "selected": true,
+            "text": "hide (session)",
+            "value": "session"
+          },
+          {
+            "selected": false,
+            "text": "show (calendar)",
+            "value": "calendar"
+          }
+        ],
+        "query": "session,calendar",
+        "skipUrlSync": false,
+        "type": "custom"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "120",
+          "value": "120"
+        },
+        "hide": 0,
+        "includeAll": false,
+        "label": "EWMA span (min)",
+        "multi": false,
+        "name": "ewma",
+        "options": [
+          {
+            "selected": false,
+            "text": "20",
+            "value": "20"
+          },
+          {
+            "selected": false,
+            "text": "60",
+            "value": "60"
+          },
+          {
+            "selected": true,
+            "text": "120",
+            "value": "120"
+          },
+          {
+            "selected": false,
+            "text": "240",
+            "value": "240"
+          },
+          {
+            "selected": false,
+            "text": "480",
+            "value": "480"
+          }
+        ],
+        "query": "20,60,120,240,480",
+        "skipUrlSync": false,
+        "type": "custom"
+      },
+      {
+        "current": {
+          "selected": false,
+          "text": "",
+          "value": ""
+        },
+        "hide": 0,
+        "label": "Y min (blank=auto)",
+        "name": "y_min",
+        "options": [
+          {
+            "selected": false,
+            "text": "",
+            "value": ""
+          }
+        ],
+        "query": "",
+        "skipUrlSync": false,
+        "type": "textbox"
+      },
+      {
+        "current": {
+          "selected": false,
+          "text": "",
+          "value": ""
+        },
+        "hide": 0,
+        "label": "Y max (blank=auto)",
+        "name": "y_max",
+        "options": [
+          {
+            "selected": false,
+            "text": "",
+            "value": ""
+          }
+        ],
+        "query": "",
+        "skipUrlSync": false,
+        "type": "textbox"
+      }
+    ]
+  },
+  "time": {
+    "from": "2026-07-06T00:00:00.000Z",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": [
+      "5s",
+      "10s",
+      "30s",
+      "1m",
+      "5m",
+      "15m"
+    ],
+    "time_options": [
+      "5m",
+      "15m",
+      "1h",
+      "3h",
+      "6h",
+      "12h",
+      "24h",
+      "2d",
+      "7d",
+      "30d"
+    ],
+    "quick_ranges": [
+      {
+        "display": "Last 15 minutes",
+        "from": "now-15m",
+        "to": "now"
+      },
+      {
+        "display": "Last 1 hour",
+        "from": "now-1h",
+        "to": "now"
+      },
+      {
+        "display": "Last 6 hours",
+        "from": "now-6h",
+        "to": "now"
+      },
+      {
+        "display": "Last 24 hours",
+        "from": "now-24h",
+        "to": "now"
+      },
+      {
+        "display": "Last 2 days",
+        "from": "now-2d",
+        "to": "now"
+      },
+      {
+        "display": "Last 7 days",
+        "from": "now-7d",
+        "to": "now"
+      },
+      {
+        "display": "Last 30 days",
+        "from": "now-30d",
+        "to": "now"
+      },
+      {
+        "display": "Full range",
+        "from": "2026-07-06T00:00:00.000Z",
+        "to": "now"
+      }
+    ]
+  },
+  "timezone": "utc",
+  "title": "Swissquote BBO",
+  "uid": "swissquote-bbo",
+  "version": 15,
+  "weekStart": ""
+}
