@@ -6,6 +6,8 @@ All notable changes to the Swissquote C++26 engine and Python client follow
 ## [Unreleased]
 
 ### Added
+- Grafana **Swissquote BBO** dashboard: spread abs + EWMA overlay, **Clean lag** outlier filter, weekend/session axis (synced from `arathi-research/grafana` `dashboards/swissquote/`)
+
 - `swissquote-feed` weekend pause: skip REST polls Fri 16:55–Sun 16:50 America/New_York
   when `[feed].weekend_pause` is enabled (default true); writer stays up
 
