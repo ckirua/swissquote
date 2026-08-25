@@ -5,6 +5,8 @@ All notable changes to the Swissquote C++26 engine and Python client follow
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-08-25
+
 ### Added
 - Grafana **Swissquote BBO** dashboard: spread abs + EWMA overlay, **Clean lag** outlier filter, weekend/session axis (synced from `arathi-research/grafana` `dashboards/swissquote/`)
 
