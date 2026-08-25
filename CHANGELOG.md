@@ -5,6 +5,9 @@ All notable changes to the Swissquote C++26 engine and Python client follow
 
 ## [Unreleased]
 
+### Fixed
+- Install script creates `LOG_DIR` owned by the service user so the feed can write logs on fresh install.
+
 ## [0.2.2] - 2026-08-25
 
 ### Added
