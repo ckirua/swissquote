@@ -298,6 +298,30 @@ TEST_CASE("writer pipeline benchmarks", "[benchmark][writer]") {
         std::size_t payload_bytes{};
     };
 
+    using RowBuffer = swissquote::ingest::RowBuffer;
+    using ViewRows = std::vector<swissquote::codec::BboRowView>;
+
+    const auto materialize_views = [&](const ViewRows& rows, RowBuffer& buffer) {
+        buffer.clear();
+        for (const auto& row : rows) {
+            if (!swissquote::codec::is_valid_bbo_row(row, now_ms)) {
+                continue;
+            }
+            buffer.append(swissquote::codec::BboRow{
+                .ts_ms = row.ts_ms,
+                .symbol = std::string(row.symbol),
+                .platform = std::string(row.platform),
+                .server = std::string(row.server),
+                .spread_profile = std::string(row.spread_profile),
+                .bid_price = row.bid_price,
+                .ask_price = row.ask_price,
+                .bid_spread = row.bid_spread,
+                .ask_spread = row.ask_spread,
+            });
+        }
+        return buffer.size();
+    };
+
     const auto legacy_pipeline = [&](const std::vector<std::byte>& frame) {
         const auto decoded = flatten_bbo_frame(frame);
         if (!decoded) {
@@ -322,23 +346,8 @@ TEST_CASE("writer pipeline benchmarks", "[benchmark][writer]") {
             return PipelineResult{};
         }
 
-        swissquote::ingest::RowBuffer buffer;
-        for (const auto& row : *decoded) {
-            if (!swissquote::codec::is_valid_bbo_row(row, now_ms)) {
-                continue;
-            }
-            buffer.append(swissquote::codec::BboRow{
-                .ts_ms = row.ts_ms,
-                .symbol = std::string(row.symbol),
-                .platform = std::string(row.platform),
-                .server = std::string(row.server),
-                .spread_profile = std::string(row.spread_profile),
-                .bid_price = row.bid_price,
-                .ask_price = row.ask_price,
-                .bid_spread = row.bid_spread,
-                .ask_spread = row.ask_spread,
-            });
-        }
+        RowBuffer buffer;
+        materialize_views(*decoded, buffer);
         return PipelineResult{
             .rows = buffer.size(),
             .payload_bytes = swissquote::clickhouse::serialize_rows_tsv(buffer.rows()).size(),
@@ -381,6 +390,56 @@ TEST_CASE("writer pipeline benchmarks", "[benchmark][writer]") {
               << " large=" << count_allocations([&] { return view_payload(*large_frame); })
               << '\n';
 
+    const auto normal_view_rows = swissquote::codec::flatten_bbo_frame_views(*normal_frame);
+    const auto large_view_rows = swissquote::codec::flatten_bbo_frame_views(*large_frame);
+    REQUIRE(normal_view_rows.has_value());
+    REQUIRE(large_view_rows.has_value());
+    RowBuffer retained_normal_buffer;
+    RowBuffer retained_large_buffer;
+    const auto materialize_fresh = [&](const ViewRows& rows) {
+        RowBuffer buffer;
+        return materialize_views(rows, buffer);
+    };
+    const auto materialize_retained_normal = [&] {
+        return materialize_views(*normal_view_rows, retained_normal_buffer);
+    };
+    const auto materialize_retained_large = [&] {
+        return materialize_views(*large_view_rows, retained_large_buffer);
+    };
+    static_cast<void>(materialize_retained_normal());
+    static_cast<void>(materialize_retained_large());
+
+    std::cout << "writer materialization allocations/batch: fresh_normal="
+              << count_allocations([&] { return materialize_fresh(*normal_view_rows); })
+              << " retained_normal="
+              << count_allocations(materialize_retained_normal)
+              << " fresh_large="
+              << count_allocations([&] { return materialize_fresh(*large_view_rows); })
+              << " retained_large="
+              << count_allocations(materialize_retained_large)
+              << '\n';
+    report_percentiles("writer materialization fresh normal", [&] {
+        return materialize_fresh(*normal_view_rows);
+    });
+    report_percentiles("writer materialization retained normal", materialize_retained_normal);
+    report_percentiles("writer materialization fresh large", [&] {
+        return materialize_fresh(*large_view_rows);
+    });
+    report_percentiles("writer materialization retained large", materialize_retained_large);
+
+    const auto retained_normal_payload = [&] {
+        return swissquote::clickhouse::serialize_rows_tsv(retained_normal_buffer.rows()).size();
+    };
+    const auto retained_large_payload = [&] {
+        return swissquote::clickhouse::serialize_rows_tsv(retained_large_buffer.rows()).size();
+    };
+    std::cout << "writer serialization allocations/retained batch: normal="
+              << count_allocations(retained_normal_payload)
+              << " large=" << count_allocations(retained_large_payload)
+              << '\n';
+    report_percentiles("writer serialization retained normal", retained_normal_payload);
+    report_percentiles("writer serialization retained large", retained_large_payload);
+
     report_percentiles("writer legacy normal", [&] {
         return legacy_payload(*normal_frame);
     });
@@ -398,6 +457,24 @@ TEST_CASE("writer pipeline benchmarks", "[benchmark][writer]") {
     BENCHMARK("writer legacy large") { return legacy_payload(*large_frame); };
     BENCHMARK("writer view normal") { return view_payload(*normal_frame); };
     BENCHMARK("writer view large") { return view_payload(*large_frame); };
+    BENCHMARK("writer materialization fresh normal") {
+        return materialize_fresh(*normal_view_rows);
+    };
+    BENCHMARK("writer materialization fresh large") {
+        return materialize_fresh(*large_view_rows);
+    };
+    BENCHMARK("writer materialization retained normal") {
+        return materialize_retained_normal();
+    };
+    BENCHMARK("writer materialization retained large") {
+        return materialize_retained_large();
+    };
+    BENCHMARK("writer serialization retained normal") {
+        return retained_normal_payload();
+    };
+    BENCHMARK("writer serialization retained large") {
+        return retained_large_payload();
+    };
 }
 
 TEST_CASE("ClickHouse serialization benchmarks", "[benchmark][clickhouse]") {

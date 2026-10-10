@@ -2,6 +2,10 @@
 
 namespace swissquote::ingest {
 
+void RowBuffer::reserve(const std::size_t capacity) {
+    rows_.reserve(capacity);
+}
+
 void RowBuffer::append(const codec::BboRow& row) {
     rows_.push_back(row);
 }

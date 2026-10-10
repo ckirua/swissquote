@@ -59,6 +59,9 @@ int main(int argc, char** argv) {
 
     swissquote::ingest::RowBuffer buffer;
     std::vector<swissquote::codec::BboRowView> decoded_rows;
+    if (cfg.writer.batch_size > 0) {
+        buffer.reserve(static_cast<std::size_t>(cfg.writer.batch_size));
+    }
     double last_successful_flush = swissquote::util::monotonic_sec();
     swissquote::ingest::FlushRetryPolicy retry_policy;
     const double recv_timeout = cfg.writer.recv_timeout_ms / 1000.0;

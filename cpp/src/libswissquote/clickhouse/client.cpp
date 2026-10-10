@@ -64,7 +64,6 @@ void append_ts_ms(std::string& out, std::int64_t ts_ms) {
 }
 
 void append_escaped_field(std::string& out, std::string_view value) {
-    out.reserve(out.size() + value.size());
     for (const char ch : value) {
         if (ch == '\\' || ch == '\t' || ch == '\n') {
             out.push_back('\\');
@@ -90,9 +89,15 @@ void append_number(std::string& out, Number value) {
 
 } // namespace detail
 
-std::string serialize_rows_tsv(const std::vector<codec::BboRow>& rows) {
-    std::string body;
-    body.reserve(rows.size() * 96);
+namespace {
+
+void serialize_rows_tsv_into(
+    std::string& body,
+    const std::vector<codec::BboRow>& rows) {
+    body.clear();
+    if (body.capacity() < rows.size() * 96) {
+        body.reserve(rows.size() * 96);
+    }
     for (const auto& row : rows) {
         detail::append_ts_ms(body, row.ts_ms);
         body.push_back('\t');
@@ -113,11 +118,19 @@ std::string serialize_rows_tsv(const std::vector<codec::BboRow>& rows) {
         detail::append_number(body, row.ask_spread);
         body.push_back('\n');
     }
+}
+
+} // namespace
+
+std::string serialize_rows_tsv(const std::vector<codec::BboRow>& rows) {
+    std::string body;
+    serialize_rows_tsv_into(body, rows);
     return body;
 }
 
 struct Client::Impl {
     httplib::Client client;
+    std::string payload;
 
     explicit Impl(const config::ClickHouseConfig& cfg)
         : client(cfg.host, cfg.http_port) {
@@ -126,6 +139,7 @@ struct Client::Impl {
         client.set_read_timeout(60, 0);
     }
 };
+
 
 Client::Client(config::ClickHouseConfig cfg)
     : cfg_(std::move(cfg)), impl_(std::make_unique<Impl>(cfg_)) {}
@@ -153,7 +167,7 @@ std::expected<void, std::string> Client::insert_rows(
     }
 
     const auto serialization_start = std::chrono::steady_clock::now();
-    const std::string payload = serialize_rows_tsv(rows);
+    serialize_rows_tsv_into(impl_->payload, rows);
     if (timings) {
         timings->serialization_ns = static_cast<std::uint64_t>(
             std::chrono::duration_cast<std::chrono::nanoseconds>(
@@ -178,7 +192,7 @@ std::expected<void, std::string> Client::insert_rows(
         path += std::format("&password={}", httplib::detail::encode_query_param(cfg_.password));
     }
     const auto http_start = std::chrono::steady_clock::now();
-    auto res = impl_->client.Post(path, payload, "text/tab-separated-values");
+    auto res = impl_->client.Post(path, impl_->payload, "text/tab-separated-values");
     if (timings) {
         timings->http_ns = static_cast<std::uint64_t>(
             std::chrono::duration_cast<std::chrono::nanoseconds>(

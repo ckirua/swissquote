@@ -65,6 +65,17 @@ frame views into batch-owned strings, followed by ClickHouse TSV serialization.
 Those steps span frames and retries, so they cannot be removed without changing
 batch ownership semantics.
 
+Writer benchmark reference from a Release build:
+
+```text
+materialization allocations/batch: fresh_normal=8 retained_normal=3
+materialization allocations/batch: fresh_large=81 retained_large=72
+```
+
+The production ClickHouse client retains its TSV payload buffer between
+successful or failed insert attempts. Row ownership remains batch-owned so
+failed inserts can be retried safely.
+
 Run the deterministic reusable-path allocation regression (it exits nonzero
 if either reusable operation allocates after warmup):
 

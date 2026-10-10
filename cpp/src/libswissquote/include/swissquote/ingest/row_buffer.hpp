@@ -9,6 +9,7 @@ namespace swissquote::ingest {
 
 class RowBuffer {
 public:
+    void reserve(std::size_t capacity);
     void append(const codec::BboRow& row);
 
     void append(codec::BboRow&& row);
