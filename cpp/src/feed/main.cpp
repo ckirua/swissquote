@@ -183,6 +183,7 @@ int main(int argc, char** argv) {
 
             for (const auto symbol : symbols) {
                 workers.submit([&, symbol](swissquote::net::QuotesClient& http_client) {
+                    thread_local swissquote::codec::EncodeWorkspace encode_workspace;
                     auto http_ms = 0L;
                     auto encode_ms = 0L;
                     int http_status = 0;
@@ -215,22 +216,22 @@ int main(int argc, char** argv) {
                             const auto encode_start = std::chrono::steady_clock::now();
                             const auto fetch_ms =
                                 static_cast<std::uint64_t>(swissquote::util::clock_realtime_ms());
-                            auto frame = [&] {
+                            auto encode_result = [&] {
                                 try {
-                                    return swissquote::codec::encode_bbo_frame(
-                                        symbol, response->body, fetch_ms);
+                                    return swissquote::codec::encode_bbo_frame_into(
+                                        symbol, response->body, fetch_ms, encode_workspace);
                                 } catch (...) {
                                     encode_ms = elapsed_ms(encode_start);
                                     throw;
                                 }
                             }();
                             encode_ms = elapsed_ms(encode_start);
-                            if (!frame) {
+                            if (!encode_result) {
                                 failure = "encode";
                                 swissquote::util::log_warn(
                                     std::format("{}: encode failed", symbol));
                             } else {
-                                pub.publish_nowait(*frame);
+                                pub.publish_nowait(encode_workspace.output);
                             }
                         }
                     } catch (const std::exception& ex) {

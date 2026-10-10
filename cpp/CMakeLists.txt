@@ -12,6 +12,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(SWISSQUOTE_BUILD_TESTS "Build Catch2 tests" ON)
 option(SWISSQUOTE_BUILD_BENCHMARKS "Build Catch2 benchmarks" OFF)
+option(SWISSQUOTE_BUILD_CODEC_BENCHMARK "Build standalone codec benchmark" OFF)
 
 include(FetchContent)
 
@@ -64,7 +65,7 @@ if(SWISSQUOTE_BUILD_TESTS)
     add_subdirectory(tests)
 endif()
 
-if(SWISSQUOTE_BUILD_BENCHMARKS)
+if(SWISSQUOTE_BUILD_BENCHMARKS OR SWISSQUOTE_BUILD_CODEC_BENCHMARK)
     add_subdirectory(benchmarks)
 endif()
 

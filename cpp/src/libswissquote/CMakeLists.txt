@@ -20,6 +20,7 @@ target_include_directories(swissquote_lib
         "${CMAKE_CURRENT_SOURCE_DIR}/include"
         "${CMAKE_BINARY_DIR}/generated"
     PRIVATE
+        "${CMAKE_SOURCE_DIR}/../sbe/generated"
         "${CMAKE_SOURCE_DIR}/../third_party/simdjson"
 )
 

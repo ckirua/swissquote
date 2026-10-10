@@ -69,8 +69,12 @@ void operator delete[](void* ptr, std::size_t) noexcept {
 namespace {
 
 using swissquote::codec::BboRow;
+using swissquote::codec::BboRowView;
+using swissquote::codec::EncodeWorkspace;
 using swissquote::codec::encode_bbo_frame;
+using swissquote::codec::encode_bbo_frame_into;
 using swissquote::codec::flatten_bbo_frame;
+using swissquote::codec::flatten_bbo_frame_views;
 using swissquote::test::kSampleFetchTimeMs;
 using swissquote::test::kSampleJson;
 using swissquote::test::kSampleSymbol;
@@ -189,6 +193,18 @@ TEST_CASE("codec benchmarks", "[benchmark][codec]") {
               << " malformed bytes=0 rows=0"
               << '\n';
 
+    EncodeWorkspace reusable_encode_workspace;
+    std::vector<BboRowView> reusable_view_rows;
+    const auto benchmark_encode_reusable = [&](std::string_view json) {
+        const auto result = encode_bbo_frame_into(
+            kSampleSymbol, as_bytes(json), kSampleFetchTimeMs, reusable_encode_workspace);
+        return result ? reusable_encode_workspace.output.size() : 0;
+    };
+    const auto benchmark_decode_views_reusable = [&](const std::vector<std::byte>& frame) {
+        const auto result = flatten_bbo_frame_views(frame, reusable_view_rows);
+        return result ? reusable_view_rows.size() : 0;
+    };
+
     const auto benchmark_encode = [&](std::string_view json) {
         const auto result = encode_bbo_frame(kSampleSymbol, as_bytes(json), kSampleFetchTimeMs);
         return result ? result->size() : 0;
@@ -198,7 +214,7 @@ TEST_CASE("codec benchmarks", "[benchmark][codec]") {
         return result ? result->size() : 0;
     };
     const auto benchmark_decode_views = [](const std::vector<std::byte>& frame) {
-        const auto result = swissquote::codec::flatten_bbo_frame_views(frame);
+        const auto result = flatten_bbo_frame_views(frame);
         return result ? result->size() : 0;
     };
 
@@ -222,6 +238,11 @@ TEST_CASE("codec benchmarks", "[benchmark][codec]") {
     std::cout << "codec view decode allocations/frame: normal="
               << count_allocations([&] { return benchmark_decode_views(*normal_frame); })
               << " large=" << count_allocations([&] { return benchmark_decode_views(*large_frame); })
+              << '\n';
+    std::cout << "reusable codec allocations/frame: encode="
+              << count_allocations([&] { return benchmark_encode_reusable(kSampleJson); })
+              << " view_decode="
+              << count_allocations([&] { return benchmark_decode_views_reusable(*normal_frame); })
               << '\n';
 
     report_percentiles("codec encode small", [&] { return benchmark_encode(small_json); });

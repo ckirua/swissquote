@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Regenerate SBE C headers from swissquote/sbe/bbo.xml
-#
+# Regenerate SBE headers from swissquote/sbe/bbo.xml
 # Requires: Java 17+, sbe-all jar (default: /tmp/sbe-all.jar)
 #
 # Usage (from repo root or sbe/):
 #   ./sbe/generate.sh
+#   SBE_TARGET_LANGUAGE=Cpp SBE_OUT=/tmp/sbe-cpp ./sbe/generate.sh
 #   SBE_JAR=/path/to/sbe-all.jar ./sbe/generate.sh
 
 set -euo pipefail
@@ -26,5 +26,9 @@ if [[ ! -f "$JAR" ]]; then
 fi
 
 mkdir -p "$OUT"
-java -Dsbe.output.dir="$OUT" -Dsbe.target.language=C -jar "$JAR" "$SCHEMA"
+TARGET_LANGUAGE="${SBE_TARGET_LANGUAGE:-Cpp}"
+java -Dsbe.output.dir="$OUT" -Dsbe.target.language="$TARGET_LANGUAGE" -jar "$JAR" "$SCHEMA"
+if [[ "${TARGET_LANGUAGE,,}" == "cpp" ]]; then
+  python3 "$DIR/patch_cpp_headers.py" "$OUT"
+fi
 echo "generated SBE headers in $OUT"

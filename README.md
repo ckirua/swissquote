@@ -4,10 +4,9 @@ Swissquote Data Low-Latency Engine — HTTP quotes → SBE encode → ZMQ PUB �
 
 Production services run on the **C++ engine** under [`cpp/`](cpp/). Use the **Python client** in [`python/`](python/) to subscribe, fetch quotes, and query ClickHouse (Cython decode, no server build).
 
-## Build (C++ engine)
-
 ```bash
 cd cpp
+bash scripts/install_deps.sh --check  # or omit --check to install via apt
 make build
 make test
 ```

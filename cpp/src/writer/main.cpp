@@ -58,6 +58,7 @@ int main(int argc, char** argv) {
     using Clock = std::chrono::steady_clock;
 
     swissquote::ingest::RowBuffer buffer;
+    std::vector<swissquote::codec::BboRowView> decoded_rows;
     double last_successful_flush = swissquote::util::monotonic_sec();
     swissquote::ingest::FlushRetryPolicy retry_policy;
     const double recv_timeout = cfg.writer.recv_timeout_ms / 1000.0;
@@ -126,9 +127,10 @@ int main(int argc, char** argv) {
     while (g_running.load()) {
         sub.consume_wait_frame(recv_timeout, [&](std::span<const std::byte> frame) {
             const auto decode_start = Clock::now();
-            auto rows = swissquote::codec::flatten_bbo_frame_views(frame);
+            auto decode_result =
+                swissquote::codec::flatten_bbo_frame_views(frame, decoded_rows);
             decode_ns += elapsed_ns(decode_start);
-            if (!rows) {
+            if (!decode_result) {
                 decode_errors += 1;
                 return;
             }
@@ -136,7 +138,7 @@ int main(int argc, char** argv) {
             received += 1;
             const auto materialization_start = Clock::now();
             const auto now_ms = static_cast<std::int64_t>(swissquote::util::clock_realtime_ms());
-            for (const auto& row : *rows) {
+            for (const auto& row : decoded_rows) {
                 if (!swissquote::codec::is_valid_bbo_row(row, now_ms)) {
                     rejected_rows += 1;
                     continue;

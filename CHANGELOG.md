@@ -5,6 +5,10 @@ All notable changes to the Swissquote C++26 engine and Python client follow
 
 ## [Unreleased]
 
+### Changed
+- Production C++ codec now uses the generated SBE headers from `sbe/generated/` for frame encoding and decoding; wire layout and compatibility tests remain unchanged.
+- Production writer now reuses decoded view-row storage, removing the per-frame decode result allocation.
+
 ### Fixed
 - Install script creates `LOG_DIR` owned by the service user so the feed can write logs on fresh install.
 
