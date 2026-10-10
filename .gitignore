@@ -17,3 +17,32 @@ venv/
 cpp/build/
 dist/
 build/
+
+# Local runtime / credentials
+*.log
+*.pid
+*.sock
+*.local
+*.secret
+*.pem
+*.key
+*.p12
+*.jks
+credentials.json
+credentials*.json
+secrets/
+logs/
+
+# Tooling and OS noise
+compile_commands.json
+.cache/
+.coverage
+.coverage.*
+coverage.xml
+.ruff_cache/
+.mypy_cache/
+.DS_Store
+.idea/
+.vscode/
+core
+core.*
