@@ -5,6 +5,7 @@
 #include <ctime>
 #include <format>
 #include <iterator>
+#include <limits>
 #include <stdexcept>
 #ifdef SWISSQUOTE_HAVE_OPENSSL
 #define CPPHTTPLIB_OPENSSL_SUPPORT
@@ -93,12 +94,14 @@ namespace {
 
 void serialize_rows_tsv_into(
     std::string& body,
-    const std::vector<codec::BboRow>& rows) {
+    const ingest::RowBuffer& rows) {
     body.clear();
-    if (body.capacity() < rows.size() * 96) {
+    if (rows.size() <= std::numeric_limits<std::size_t>::max() / 96 &&
+        body.capacity() < rows.size() * 96) {
         body.reserve(rows.size() * 96);
     }
-    for (const auto& row : rows) {
+    for (std::size_t index = 0; index < rows.size(); ++index) {
+        const auto row = rows.view(index);
         detail::append_ts_ms(body, row.ts_ms);
         body.push_back('\t');
         detail::append_escaped_field(body, row.symbol);
@@ -122,11 +125,12 @@ void serialize_rows_tsv_into(
 
 } // namespace
 
-std::string serialize_rows_tsv(const std::vector<codec::BboRow>& rows) {
+std::string serialize_rows_tsv(const ingest::RowBuffer& rows) {
     std::string body;
     serialize_rows_tsv_into(body, rows);
     return body;
 }
+
 
 struct Client::Impl {
     httplib::Client client;
@@ -153,7 +157,7 @@ Client& Client::operator=(Client&&) noexcept = default;
 std::expected<void, std::string> Client::insert_rows(
     const std::string& database,
     const std::string& table,
-    const std::vector<codec::BboRow>& rows,
+    const ingest::RowBuffer& rows,
     bool async_insert,
     InsertTimings* timings) const {
     if (timings) {
@@ -162,7 +166,7 @@ std::expected<void, std::string> Client::insert_rows(
     if (cfg_.host.empty()) {
         return std::unexpected("CLICKHOUSE_HOST is not set");
     }
-    if (rows.empty()) {
+    if (rows.size() == 0) {
         return {};
     }
 

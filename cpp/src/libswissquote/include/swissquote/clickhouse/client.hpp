@@ -1,15 +1,13 @@
 #pragma once
 
-#include "swissquote/codec/codec.hpp"
 #include "swissquote/config/config.hpp"
+#include "swissquote/ingest/row_buffer.hpp"
 
 #include <cstdint>
-#include <string_view>
 #include <expected>
-#include <string>
 #include <memory>
-#include <vector>
-
+#include <string>
+#include <string_view>
 namespace swissquote::clickhouse {
 
 struct InsertTimings {
@@ -22,7 +20,7 @@ namespace detail {
 [[nodiscard]] std::string escape_field(std::string_view value);
 }
 
-[[nodiscard]] std::string serialize_rows_tsv(const std::vector<codec::BboRow>& rows);
+[[nodiscard]] std::string serialize_rows_tsv(const ingest::RowBuffer& rows);
 
 class Client {
 public:
@@ -37,7 +35,7 @@ public:
     [[nodiscard]] std::expected<void, std::string> insert_rows(
         const std::string& database,
         const std::string& table,
-        const std::vector<codec::BboRow>& rows,
+        const ingest::RowBuffer& rows,
         bool async_insert,
         InsertTimings* timings = nullptr) const;
 

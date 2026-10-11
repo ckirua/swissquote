@@ -102,7 +102,7 @@ int main(int argc, char** argv) {
         auto result = ch.insert_rows(
             cfg.writer.ch_database,
             cfg.writer.ch_table,
-            buffer.rows(),
+            buffer,
             cfg.writer.async_insert,
             &insert_timings);
         if (!result) {
@@ -146,17 +146,7 @@ int main(int argc, char** argv) {
                     rejected_rows += 1;
                     continue;
                 }
-                buffer.append(swissquote::codec::BboRow{
-                    .ts_ms = row.ts_ms,
-                    .symbol = std::string(row.symbol),
-                    .platform = std::string(row.platform),
-                    .server = std::string(row.server),
-                    .spread_profile = std::string(row.spread_profile),
-                    .bid_price = row.bid_price,
-                    .ask_price = row.ask_price,
-                    .bid_spread = row.bid_spread,
-                    .ask_spread = row.ask_spread,
-                });
+                buffer.append(row);
             }
             materialization_ns += elapsed_ns(materialization_start);
         });

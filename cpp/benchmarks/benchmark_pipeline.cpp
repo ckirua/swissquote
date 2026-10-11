@@ -307,17 +307,7 @@ TEST_CASE("writer pipeline benchmarks", "[benchmark][writer]") {
             if (!swissquote::codec::is_valid_bbo_row(row, now_ms)) {
                 continue;
             }
-            buffer.append(swissquote::codec::BboRow{
-                .ts_ms = row.ts_ms,
-                .symbol = std::string(row.symbol),
-                .platform = std::string(row.platform),
-                .server = std::string(row.server),
-                .spread_profile = std::string(row.spread_profile),
-                .bid_price = row.bid_price,
-                .ask_price = row.ask_price,
-                .bid_spread = row.bid_spread,
-                .ask_spread = row.ask_spread,
-            });
+            buffer.append(row);
         }
         return buffer.size();
     };
@@ -331,12 +321,22 @@ TEST_CASE("writer pipeline benchmarks", "[benchmark][writer]") {
         swissquote::ingest::RowBuffer buffer;
         for (auto& row : *decoded) {
             if (swissquote::codec::is_valid_bbo_row(row, now_ms)) {
-                buffer.append(row);
+                buffer.append(BboRowView{
+                    .ts_ms = row.ts_ms,
+                    .symbol = row.symbol,
+                    .platform = row.platform,
+                    .server = row.server,
+                    .spread_profile = row.spread_profile,
+                    .bid_price = row.bid_price,
+                    .ask_price = row.ask_price,
+                    .bid_spread = row.bid_spread,
+                    .ask_spread = row.ask_spread,
+                });
             }
         }
         return PipelineResult{
             .rows = buffer.size(),
-            .payload_bytes = swissquote::clickhouse::serialize_rows_tsv(buffer.rows()).size(),
+            .payload_bytes = swissquote::clickhouse::serialize_rows_tsv(buffer).size(),
         };
     };
 
@@ -350,7 +350,7 @@ TEST_CASE("writer pipeline benchmarks", "[benchmark][writer]") {
         materialize_views(*decoded, buffer);
         return PipelineResult{
             .rows = buffer.size(),
-            .payload_bytes = swissquote::clickhouse::serialize_rows_tsv(buffer.rows()).size(),
+            .payload_bytes = swissquote::clickhouse::serialize_rows_tsv(buffer).size(),
         };
     };
 
@@ -428,10 +428,10 @@ TEST_CASE("writer pipeline benchmarks", "[benchmark][writer]") {
     report_percentiles("writer materialization retained large", materialize_retained_large);
 
     const auto retained_normal_payload = [&] {
-        return swissquote::clickhouse::serialize_rows_tsv(retained_normal_buffer.rows()).size();
+        return swissquote::clickhouse::serialize_rows_tsv(retained_normal_buffer).size();
     };
     const auto retained_large_payload = [&] {
-        return swissquote::clickhouse::serialize_rows_tsv(retained_large_buffer.rows()).size();
+        return swissquote::clickhouse::serialize_rows_tsv(retained_large_buffer).size();
     };
     std::cout << "writer serialization allocations/retained batch: normal="
               << count_allocations(retained_normal_payload)
@@ -485,22 +485,43 @@ TEST_CASE("ClickHouse serialization benchmarks", "[benchmark][clickhouse]") {
     REQUIRE(decoded.has_value());
     REQUIRE_FALSE(decoded->empty());
 
+    const auto make_buffer = [](const std::vector<BboRow>& rows) {
+        swissquote::ingest::RowBuffer buffer;
+        for (const auto& row : rows) {
+            buffer.append(BboRowView{
+                .ts_ms = row.ts_ms,
+                .symbol = row.symbol,
+                .platform = row.platform,
+                .server = row.server,
+                .spread_profile = row.spread_profile,
+                .bid_price = row.bid_price,
+                .ask_price = row.ask_price,
+                .bid_spread = row.bid_spread,
+                .ask_spread = row.ask_spread,
+            });
+        }
+        return buffer;
+    };
+
     const std::vector<BboRow> small_rows{decoded->front()};
     const std::vector<BboRow>& normal_rows = *decoded;
     const std::vector<BboRow> large_rows = repeat_rows(normal_rows, 20);
+    const auto small_buffer = make_buffer(small_rows);
+    const auto normal_buffer = make_buffer(normal_rows);
+    const auto large_buffer = make_buffer(large_rows);
 
-    const auto benchmark_serialize = [](const std::vector<BboRow>& rows) {
+    const auto benchmark_serialize = [](const swissquote::ingest::RowBuffer& rows) {
         return swissquote::clickhouse::serialize_rows_tsv(rows).size();
     };
 
     std::cout << "ClickHouse serialization allocations/batch: small="
-              << count_allocations([&] { return benchmark_serialize(small_rows); })
-              << " normal=" << count_allocations([&] { return benchmark_serialize(normal_rows); })
-              << " large=" << count_allocations([&] { return benchmark_serialize(large_rows); })
+              << count_allocations([&] { return benchmark_serialize(small_buffer); })
+              << " normal=" << count_allocations([&] { return benchmark_serialize(normal_buffer); })
+              << " large=" << count_allocations([&] { return benchmark_serialize(large_buffer); })
               << '\n';
-    std::cout << "ClickHouse payload bytes: small=" << benchmark_serialize(small_rows)
-              << " normal=" << benchmark_serialize(normal_rows)
-              << " large=" << benchmark_serialize(large_rows)
+    std::cout << "ClickHouse payload bytes: small=" << benchmark_serialize(small_buffer)
+              << " normal=" << benchmark_serialize(normal_buffer)
+              << " large=" << benchmark_serialize(large_buffer)
               << '\n';
     std::cout << "ClickHouse component allocations/call: timestamp="
               << count_allocations([&] {
@@ -513,13 +534,13 @@ TEST_CASE("ClickHouse serialization benchmarks", "[benchmark][clickhouse]") {
               << '\n';
 
     report_percentiles("ClickHouse serialize small", [&] {
-        return benchmark_serialize(small_rows);
+        return benchmark_serialize(small_buffer);
     });
     report_percentiles("ClickHouse serialize normal", [&] {
-        return benchmark_serialize(normal_rows);
+        return benchmark_serialize(normal_buffer);
     });
     report_percentiles("ClickHouse serialize large", [&] {
-        return benchmark_serialize(large_rows);
+        return benchmark_serialize(large_buffer);
     });
     report_percentiles("ClickHouse format timestamp", [&] {
         return swissquote::clickhouse::detail::format_ts_ms(kSampleFetchTimeMs).size();
@@ -528,9 +549,9 @@ TEST_CASE("ClickHouse serialization benchmarks", "[benchmark][clickhouse]") {
         return swissquote::clickhouse::detail::escape_field("Swissquote\\\tvenue").size();
     });
 
-    BENCHMARK("serialize small batch") { return benchmark_serialize(small_rows); };
-    BENCHMARK("serialize normal batch") { return benchmark_serialize(normal_rows); };
-    BENCHMARK("serialize large batch") { return benchmark_serialize(large_rows); };
+    BENCHMARK("serialize small batch") { return benchmark_serialize(small_buffer); };
+    BENCHMARK("serialize normal batch") { return benchmark_serialize(normal_buffer); };
+    BENCHMARK("serialize large batch") { return benchmark_serialize(large_buffer); };
     BENCHMARK("format timestamp") {
         return swissquote::clickhouse::detail::format_ts_ms(kSampleFetchTimeMs).size();
     };
