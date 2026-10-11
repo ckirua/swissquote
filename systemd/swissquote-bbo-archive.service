@@ -1,0 +1,14 @@
+[Unit]
+Description=Swissquote BBO daily Parquet archive to S3
+After=network-online.target clickhouse-server.service
+Wants=network-online.target
+Requires=clickhouse-server.service
+
+[Service]
+Type=oneshot
+User=root
+EnvironmentFile=-/root/.env
+ExecStart=/opt/swissquote/ops/archive_bbo_daily.sh
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=swissquote-bbo-archive

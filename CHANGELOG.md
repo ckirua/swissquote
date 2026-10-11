@@ -5,9 +5,13 @@ All notable changes to the Swissquote C++26 engine and Python client follow
 
 ## [Unreleased]
 
+### Added
+- Daily ClickHouse-to-S3 Parquet archive for Swissquote BBO, scheduled at 06:00 UTC.
+
 ### Changed
 - Production C++ codec now uses the generated SBE headers from `sbe/generated/` for frame encoding and decoding; wire layout and compatibility tests remain unchanged.
 - Writer now reserves configured batch capacity and reuses ClickHouse TSV payload storage across flushes; retained normal-batch materialization measured 3 allocations versus 8 for a fresh batch.
+- Writer logs one-minute ZMQ queue, decode, materialization, ClickHouse serialization, and HTTP timing summaries at INFO.
 
 ### Fixed
 - Install script creates `LOG_DIR` owned by the service user so the feed can write logs on fresh install.
