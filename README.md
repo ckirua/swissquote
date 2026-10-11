@@ -42,6 +42,7 @@ bash ops/smoke_cpp.sh                 # ZMQ + decode smoke
 
 Dev unit files live in [`systemd/dev/`](systemd/dev/) (home paths).
 
+
 ## Production install (`/opt`, gated epochs)
 
 Prod installs to `/opt/swissquote` with config in `/etc/swissquote`. Each epoch runs and verifies before the next; resume after a failure with `--from-epoch N`.
@@ -87,6 +88,15 @@ Prod upgrades on an installed tree: `sudo bash /opt/swissquote/install.sh --from
 
 Logs: `journalctl -u swissquote-feed -f` / `journalctl -u swissquote-writer -f`
 
+The production writer emits an INFO diagnostics summary once per minute:
+`journalctl -u swissquote-writer -f`. It reports enqueued/consumed frame rates,
+ClickHouse-accepted row rate, sampled ZMQ queue depth, queue push attempt failures
+(including retries; not necessarily lost frames), frame size, decode/rejection
+counts, flush results, and decode/materialization/serialization/HTTP timings.
+With async inserts enabled, successful HTTP acceptance does not mean ClickHouse
+has finished inserting the rows. Startup logs the ZMQ ring's configured
+allocation capacity; this is not the same as resident memory.
+
 The C++ writer uses ClickHouse **HTTP on port 8123** (set `CLICKHOUSE_HTTP_PORT` in env file).
 
 ## Environment variables
@@ -121,6 +131,16 @@ Existing hosts that already have `bbo`: apply the idempotent upgrade
 `bbo` uses `ReplacingMergeTree(ingestion_time)` — `count(*)` may fluctuate until
 background merges dedupe rows with the same quote key; use `count(*) FINAL` for stable totals.
 Quote `ts` reflects market timestamps (stale on weekends); `ingestion_time` tracks live inserts.
+
+## S3 archive
+
+The production installer enables `swissquote-bbo-archive.timer`, which exports
+the previous UTC calendar day's `swissquote.bbo` rows to
+`s3://${S3_SWISSQUOTE_BUCKET}/archive/bbo/year=YYYY/week=WW/` as Parquet every
+day at 06:00 UTC. Empty days are skipped; an existing object is left untouched,
+so reruns are idempotent. The service reads ClickHouse and S3 credentials from
+`/root/.env`. Run `sudo bash install.sh --from-epoch 4` to deploy the archive
+script and timer alongside the C++ release.
 
 ## Examples (manual)
 

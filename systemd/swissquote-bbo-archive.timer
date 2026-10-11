@@ -1,0 +1,10 @@
+[Unit]
+Description=Run Swissquote BBO daily S3 archive (06:00 UTC)
+
+[Timer]
+OnCalendar=*-*-* 06:00:00 UTC
+Persistent=true
+Unit=swissquote-bbo-archive.service
+
+[Install]
+WantedBy=timers.target
