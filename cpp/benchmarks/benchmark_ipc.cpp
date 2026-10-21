@@ -42,7 +42,7 @@ bool verify_payload(std::span<const std::byte> frame) {
     return true;
 }
 int child_consume(const std::string& mode, const std::string& endpoint, std::size_t count,
-                  std::size_t frame_size, int result_fd) {
+                  std::size_t frame_size, int result_fd, int ack_fd) {
     std::vector<std::int64_t> latency;
     latency.reserve(count);
     std::vector<std::byte> frame(frame_size);
@@ -58,6 +58,8 @@ int child_consume(const std::string& mode, const std::string& endpoint, std::siz
                     std::memcpy(&envelope, frame.data(), sizeof(envelope));
                     if (envelope.sequence != got) return 4;
                     latency.push_back(static_cast<std::int64_t>(monotonic_ns() - envelope.sent_ns));
+                    const char ack = '1';
+                    if (::write(ack_fd, &ack, 1) != 1) return 10;
                     ++got;
                 } else {
                     const auto sequence = ring.notification_sequence();
@@ -75,6 +77,8 @@ int child_consume(const std::string& mode, const std::string& endpoint, std::siz
                 std::memcpy(&envelope, received->data(), sizeof(envelope));
                 if (envelope.sequence != got) return 7;
                 latency.push_back(static_cast<std::int64_t>(monotonic_ns() - envelope.sent_ns));
+                const char ack = '1';
+                if (::write(ack_fd, &ack, 1) != 1) return 11;
                 ++got;
             }
         }
@@ -92,16 +96,18 @@ void run_case(const std::string& mode, std::size_t frame_size, std::size_t count
         ? std::format("/swissquote-bench-{}-{}", getpid(), repetition)
         : std::format("/tmp/swissquote-bench-{}-{}.sock", getpid(), repetition);
     Ring ring = mode == "ring" ? Ring::create(endpoint) : Ring::create("/swissquote-bench-unused-" + std::to_string(getpid()));
-    int pipes[2];
-    if (::pipe(pipes) != 0) throw std::runtime_error("pipe failed");
+    int pipes[2], ack_pipe[2];
+    if (::pipe(pipes) != 0 || ::pipe(ack_pipe) != 0) throw std::runtime_error("pipe failed");
     const pid_t child = ::fork();
     if (child < 0) throw std::runtime_error("fork failed");
     if (child == 0) {
         ::close(pipes[0]);
-        const int result = child_consume(mode, endpoint, count, frame_size, pipes[1]);
+        ::close(ack_pipe[0]);
+        const int result = child_consume(mode, endpoint, count, frame_size, pipes[1], ack_pipe[1]);
         ::_exit(result);
     }
     ::close(pipes[1]);
+    ::close(ack_pipe[1]);
     std::unique_ptr<swissquote::ipc::ThreadedUnixSeqpacketPub> pub;
     if (mode == "uds") {
         pub = std::make_unique<swissquote::ipc::ThreadedUnixSeqpacketPub>(endpoint);
@@ -126,20 +132,14 @@ void run_case(const std::string& mode, std::size_t frame_size, std::size_t count
                 std::this_thread::yield();
             pub->publish_nowait(payload);
         }
-        if (mode == "uds" && ((seq + 1) % burst == 0 || seq + 1 == count)) {
-            const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
-            while (pub->stats().sent < seq + 1
-                   && pub->stats().client_count > 0
-                   && std::chrono::steady_clock::now() < deadline)
-                std::this_thread::yield();
-            if (pub->stats().sent < seq + 1)
-                throw std::runtime_error("UDS failed to deliver all frames within 10 seconds");
-        }
-        if ((seq + 1) % burst == 0) std::this_thread::yield();
+        char ack = 0;
+        if (::read(ack_pipe[0], &ack, 1) != 1 || ack != '1')
+            throw std::runtime_error("consumer failed to acknowledge verified frame");
     }
     std::array<std::uint64_t, 3> result{};
     if (::read(pipes[0], result.data(), sizeof(result)) != sizeof(result))
         throw std::runtime_error("consumer did not report complete run");
+    ::close(ack_pipe[0]);
     int status = 0;
     if (::waitpid(child, &status, 0) != child || !WIFEXITED(status) || WEXITSTATUS(status) != 0)
         throw std::runtime_error("consumer failed or observed corrupt/lost frames");

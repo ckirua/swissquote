@@ -54,6 +54,21 @@ cpp/build/benchmarks/swissquote_benchmarks "[benchmark]" --reporter compact
 
 The allocation benchmark reports both return-by-value and reusable paths.
 
+Build and run the optional Unix-socket/shared-memory IPC benchmark:
+
+```bash
+cmake -S cpp -B cpp/build -DCMAKE_BUILD_TYPE=Release \
+  -DSWISSQUOTE_BUILD_BENCHMARKS=ON
+cmake --build cpp/build --target swissquote_ipc_benchmark -j
+cpp/build/benchmarks/swissquote_ipc_benchmark \
+  --repetitions 5 --burst-size 87 --frame-count 100000
+```
+
+The benchmark waits for the receiver to validate each frame before publishing
+the next one. This prevents the nonblocking Unix publisher from disconnecting
+the benchmark consumer under an artificial producer burst; the receiver's
+acknowledgement is outside the reported one-way latency.
+
 `EncodeWorkspace` and reusable decoder vectors retain peak capacity on purpose;
 they are thread-confined and sequentially reusable. The Unix IPC ring limits
 frames to 65,536 bytes. The feed broadcasts each SBE frame as one

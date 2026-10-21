@@ -13,6 +13,9 @@ All notable changes to the Swissquote C++26 engine and Python client follow
 - Writer now reserves configured batch capacity and reuses ClickHouse TSV payload storage across flushes; retained normal-batch materialization measured 3 allocations versus 8 for a fresh batch.
 - Removed the ZeroMQ transport and dependency; feed, writer, and Python subscribers now exchange complete SBE frames over a local Unix-domain SOCK_SEQPACKET socket.
 
+- The optional shared-memory IPC benchmark acknowledges verified frames before
+  the next publish so its full-size UDS case measures delivered frames rather
+  than overwhelming the nonblocking publisher's slow-client policy.
 ### Fixed
 - Install script creates `LOG_DIR` owned by the service user so the feed can write logs on fresh install.
 
