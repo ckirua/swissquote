@@ -4,7 +4,7 @@ set -eu
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
 require_root
 
-export INSTALL_ROOT CONFIG_PATH ENV_PATH SERVICE_USER FEED_UNIT UNIT_SUFFIX
+export INSTALL_ROOT CONFIG_PATH ENV_PATH SERVICE_USER FEED_UNIT UNIT_SUFFIX RUN_DIRECTORY
 
 render_unit() {
   local template="$1"
@@ -15,7 +15,7 @@ render_unit() {
     -e "s|@ENV_PATH@|${ENV_PATH}|g" \
     -e "s|@SERVICE_USER@|${SERVICE_USER}|g" \
     -e "s|@FEED_UNIT@|${FEED_UNIT}|g" \
-    -e "s|@UNIT_SUFFIX@|${UNIT_SUFFIX}|g" \
+    -e "s|@RUN_DIRECTORY@|${RUN_DIRECTORY}|g" \
     <"${template}" >"${dest}.tmp"
   install -m 644 "${dest}.tmp" "${dest}"
   rm -f "${dest}.tmp"

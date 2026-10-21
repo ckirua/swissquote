@@ -1,5 +1,5 @@
 [Unit]
-Description=Swissquote BBO feed (ZMQ PUB) @INSTALL_ROOT@
+Description=Swissquote BBO feed (Unix SOCK_SEQPACKET publisher) @INSTALL_ROOT@
 After=network-online.target
 Wants=network-online.target
 
@@ -7,6 +7,9 @@ Wants=network-online.target
 Type=simple
 User=@SERVICE_USER@
 Group=@SERVICE_USER@
+RuntimeDirectory=@RUN_DIRECTORY@
+RuntimeDirectoryMode=0750
+UMask=0007
 
 WorkingDirectory=@INSTALL_ROOT@
 EnvironmentFile=-@ENV_PATH@

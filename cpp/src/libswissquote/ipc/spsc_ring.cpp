@@ -1,10 +1,10 @@
-#include "swissquote/zmq/spsc_ring.hpp"
+#include "swissquote/ipc/spsc_ring.hpp"
 
 #include <cstring>
+#include <new>
 #include <stdexcept>
-#include <utility>
 
-namespace swissquote::zmq {
+namespace swissquote::ipc {
 namespace {
 
 inline void write_u32_le(char* dst, std::uint32_t value) noexcept {
@@ -24,29 +24,24 @@ inline std::uint32_t read_u32_le(const char* src) noexcept {
 } // namespace
 
 SpscBytesRing::SpscBytesRing(std::size_t capacity, std::size_t max_payload)
-    : capacity_(capacity), mask_(capacity - 1), max_payload_(max_payload), slot_bytes_(4 + max_payload) {
+    : capacity_(capacity),
+      mask_(capacity - 1),
+      max_payload_(max_payload),
+      slots_(capacity) {
     if (!is_pow2(capacity)) {
         throw std::invalid_argument("capacity must be a power of 2");
     }
     if (max_payload == 0) {
         throw std::invalid_argument("max_payload must be > 0");
     }
-    const std::size_t buf_size = slot_bytes_ * capacity_;
-    buf_ = new char[buf_size];
-}
-
-SpscBytesRing::~SpscBytesRing() {
-    delete[] buf_;
-}
-
-bool SpscBytesRing::is_pow2(std::size_t n) noexcept {
-    return n > 0 && (n & (n - 1)) == 0;
 }
 
 char* SpscBytesRing::slot_ptr(std::size_t index) noexcept {
-    return buf_ + ((index & mask_) * slot_bytes_);
+    return slots_[index & mask_].data();
 }
-
+bool SpscBytesRing::is_pow2(std::size_t n) noexcept {
+    return n > 0 && (n & (n - 1)) == 0;
+}
 bool SpscBytesRing::is_full(std::size_t head, std::size_t tail) const noexcept {
     return (tail - head) == capacity_;
 }
@@ -74,6 +69,13 @@ bool SpscBytesRing::try_push_bytes(const char* data, std::size_t length) {
         return false;
     }
 
+    auto& slot_storage = slots_[tail & mask_];
+    try {
+        slot_storage.resize(4 + length);
+    } catch (const std::bad_alloc&) {
+        dropped_.fetch_add(1, std::memory_order_relaxed);
+        return false;
+    }
     char* slot = slot_ptr(tail);
     write_u32_le(slot, static_cast<std::uint32_t>(length));
     if (length > 0) {
@@ -119,4 +121,4 @@ bool SpscBytesRing::try_commit_pop() noexcept {
     return true;
 }
 
-} // namespace swissquote::zmq
+} // namespace swissquote::ipc

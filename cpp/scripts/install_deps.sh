@@ -34,12 +34,11 @@ export DEBIAN_FRONTEND=noninteractive
 "${APT[@]}" install -y --no-install-recommends \
     cmake \
     g++ \
-    pkg-config \
-    libzmq3-dev \
     libssl-dev \
     curl \
     ca-certificates \
     gettext-base \
+    python3 \
     rsync \
     default-jre-headless
 

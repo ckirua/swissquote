@@ -44,8 +44,6 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(Catch2 spdlog CLI11 tomlplusplus httplib)
 
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(ZMQ REQUIRED libzmq)
 
 find_package(OpenSSL QUIET)
 if(OpenSSL_FOUND)
