@@ -3,7 +3,7 @@
 Native production engine for the Swissquote BBO pipeline:
 
 ```
-HTTP quotes → JSON→SBE encode → ZMQ PUB → ZMQ SUB → decode → ClickHouse
+HTTP quotes → JSON→SBE encode → Unix-domain SOCK_SEQPACKET → decode → ClickHouse
 ```
 
 ## Deploy
@@ -55,10 +55,10 @@ cpp/build/benchmarks/swissquote_benchmarks "[benchmark]" --reporter compact
 The allocation benchmark reports both return-by-value and reusable paths.
 
 `EncodeWorkspace` and reusable decoder vectors retain peak capacity on purpose;
-they are thread-confined and sequentially reusable. The production SPSC ring
-limits frames to 65,536 bytes. Do not shrink workspaces in the hot loop. If
-future inputs are allowed above that bound, add an explicit opt-in trim/reset
-operation and measure its memory tradeoff first.
+they are thread-confined and sequentially reusable. The Unix IPC ring limits
+frames to 65,536 bytes. The feed broadcasts each SBE frame as one
+`AF_UNIX/SOCK_SEQPACKET` message to connected local consumers; slow clients are
+disconnected rather than blocking feed workers.
 
 The remaining writer cost is intentional ownership conversion from borrowed
 frame views into batch-owned strings, followed by ClickHouse TSV serialization.
@@ -87,8 +87,8 @@ cpp/build/benchmarks/swissquote_codec_allocation_regression
 
 | Binary | Role |
 |--------|------|
-| `swissquote-feed` | Poll Swissquote REST API, encode SBE, ZMQ PUB |
-| `swissquote-writer` | ZMQ SUB, decode, batch insert ClickHouse |
+| `swissquote-feed` | Poll Swissquote REST API, encode SBE, broadcast over Unix IPC |
+| `swissquote-writer` | Unix-domain SOCK_SEQPACKET consumer, decode, batch insert ClickHouse |
 
 Both accept `--config ~/.config/service.toml` and print `--version`.
 

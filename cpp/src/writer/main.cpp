@@ -7,7 +7,7 @@
 #include "swissquote/util/clock.hpp"
 #include "swissquote/util/logging.hpp"
 #include "swissquote/version.hpp"
-#include "swissquote/zmq/sub.hpp"
+#include "swissquote/ipc/unix_sub.hpp"
 
 #include <CLI/CLI.hpp>
 
@@ -30,11 +30,10 @@ void on_signal(int) {
 
 int main(int argc, char** argv) {
     swissquote::config::CliOverrides cli;
-    CLI::App app{"swissquote-writer — ZMQ SUB → decode → ClickHouse"};
+    CLI::App app{"swissquote-writer — Unix IPC → decode → ClickHouse"};
     app.set_version_flag("-v,--version", SWISSQUOTE_VERSION);
     app.add_option("--config", cli.config_path, "path to service.toml");
-    app.add_option("--host", cli.host, "ZMQ connect host");
-    app.add_option("--port", cli.port, "ZMQ port");
+    app.add_option("--socket-path", cli.socket_path, "Unix-domain seqpacket socket path");
     app.add_option("--log-level", cli.log_level, "log level");
     app.add_option("--log-dir", cli.log_dir, "log directory");
     app.add_option("--batch-size", cli.batch_size, "rows per flush");
@@ -53,7 +52,7 @@ int main(int argc, char** argv) {
                 std::chrono::duration<double>(cfg.writer.startup_delay_sec)));
     }
 
-    swissquote::zmq::ThreadedZmqSub sub(cfg.zmq.endpoint());
+    swissquote::ipc::ThreadedUnixSeqpacketSub sub(cfg.ipc.socket_path);
     sub.start();
 
     swissquote::clickhouse::Client ch(cfg.clickhouse);
@@ -108,21 +107,21 @@ int main(int argc, char** argv) {
         return count == 0 ? 0.0 : static_cast<double>(ns) / (1000.0 * count);
     };
 
-    const auto ring_buffer_bytes =
-        static_cast<std::uint64_t>(swissquote::zmq::ThreadedZmqSub::kRingCapacity) *
-        (swissquote::zmq::ThreadedZmqSub::kMaxPayload + sizeof(std::uint32_t));
+    const auto ring_buffer_max_bytes =
+        static_cast<std::uint64_t>(swissquote::ipc::ThreadedUnixSeqpacketSub::kRingCapacity) *
+        (swissquote::ipc::ThreadedUnixSeqpacketSub::kMaxPayload + sizeof(std::uint32_t));
 
     swissquote::util::log_info(std::format(
-        "writer started sub={} ch={}.{} batch={} interval={:.1f}s "
-        "queue_slots={} queue_max_frame_bytes={} queue_buffer_alloc_bytes={}",
-        cfg.zmq.endpoint(),
+        "writer started ipc={} ch={}.{} batch={} interval={:.1f}s "
+        "queue_slots={} queue_max_frame_bytes={} queue_max_buffer_bytes={}",
+        cfg.ipc.socket_path,
         cfg.writer.ch_database,
         cfg.writer.ch_table,
         cfg.writer.batch_size,
         cfg.writer.batch_interval_sec,
-        swissquote::zmq::ThreadedZmqSub::kRingCapacity,
-        swissquote::zmq::ThreadedZmqSub::kMaxPayload,
-        ring_buffer_bytes));
+        swissquote::ipc::ThreadedUnixSeqpacketSub::kRingCapacity,
+        swissquote::ipc::ThreadedUnixSeqpacketSub::kMaxPayload,
+        ring_buffer_max_bytes));
     auto flush = [&](bool final_attempt = false) {
         if (buffer.size() == 0) {
             return;
@@ -266,7 +265,7 @@ int main(int argc, char** argv) {
                 interval_rows_buffered,
                 buffer.size(),
                 sub_stats.queue_size,
-                swissquote::zmq::ThreadedZmqSub::kRingCapacity,
+                swissquote::ipc::ThreadedUnixSeqpacketSub::kRingCapacity,
                 interval_max_queue_size,
                 push_failures_delta,
                 recv_errors_delta,

@@ -1,6 +1,6 @@
 """Post-decode validation for flattened BBO rows.
 
-Corrupt ZMQ/SBE frames can decode without raising when length fields still fit
+Corrupt SBE frames can decode without raising when length fields still fit
 inside the buffer. Typical signatures:
 
 - ``platform='apitalMarkets'`` — 13-byte skew into ``SwissquoteCapitalMarkets``

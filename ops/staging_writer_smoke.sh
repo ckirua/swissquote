@@ -4,8 +4,11 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WRITER="${REPO_ROOT}/cpp/build/swissquote-writer"
-PRODUCTION_CONFIG="/home/swissquote/.config/service.toml"
-PRODUCTION_ENDPOINT="tcp://127.0.0.1:5559"
+PRODUCTION_CONFIG="/etc/swissquote/service.toml"
+LEGACY_PRODUCTION_CONFIG="/home/swissquote/.config/service.toml"
+PRODUCTION_SOCKET_PATH="/run/swissquote/feed.sock"
+STAGING_SOCKET_PATH="${STAGING_SOCKET_PATH:-/run/swissquote-staging/feed.sock}"
+PRODUCTION_CONFIGS=("${PRODUCTION_CONFIG}" "${LEGACY_PRODUCTION_CONFIG}")
 
 fail() {
   echo "ERROR: $*" >&2
@@ -13,18 +16,21 @@ fail() {
 }
 
 : "${STAGING_CONFIG:?STAGING_CONFIG must be set to a staging service.toml}"
-: "${STAGING_ZMQ_ENDPOINT:?STAGING_ZMQ_ENDPOINT must be set to a staging tcp endpoint}"
 
-if [[ "${STAGING_CONFIG}" == "${PRODUCTION_CONFIG}" ]]; then
-  fail "STAGING_CONFIG must not be the production config (${PRODUCTION_CONFIG})"
-fi
+for production_config in "${PRODUCTION_CONFIGS[@]}"; do
+  if [[ "${STAGING_CONFIG}" == "${production_config}" ]]; then
+    fail "STAGING_CONFIG must not be a production config (${production_config})"
+  fi
+done
 
-# Resolve both paths so a symlink or relative path cannot select production config.
+# Resolve paths so a symlink or relative path cannot select a production config.
 config_real="$(realpath -m -- "${STAGING_CONFIG}")"
-production_config_real="$(realpath -m -- "${PRODUCTION_CONFIG}")"
-if [[ "${config_real}" == "${production_config_real}" ]]; then
-  fail "STAGING_CONFIG resolves to the production config (${PRODUCTION_CONFIG})"
-fi
+for production_config in "${PRODUCTION_CONFIGS[@]}"; do
+  production_config_real="$(realpath -m -- "${production_config}")"
+  if [[ "${config_real}" == "${production_config_real}" ]]; then
+    fail "STAGING_CONFIG resolves to a production config (${production_config})"
+  fi
+done
 if [[ ! -f "${STAGING_CONFIG}" ]]; then
   fail "staging config does not exist or is not a regular file: ${STAGING_CONFIG}"
 fi
@@ -33,30 +39,23 @@ if [[ ! -x "${WRITER}" ]]; then
   fail "built writer binary is missing or not executable: ${WRITER}"
 fi
 
-if [[ "${STAGING_ZMQ_ENDPOINT}" == "${PRODUCTION_ENDPOINT}" ]]; then
-  fail "STAGING_ZMQ_ENDPOINT must differ from the production endpoint (${PRODUCTION_ENDPOINT})"
+if [[ "${STAGING_SOCKET_PATH}" == "${PRODUCTION_SOCKET_PATH}" ]]; then
+  fail "STAGING_SOCKET_PATH must differ from the production socket (${PRODUCTION_SOCKET_PATH})"
+fi
+if [[ "${STAGING_SOCKET_PATH}" != /* || "${STAGING_SOCKET_PATH}" =~ [[:space:]] ]]; then
+  fail "STAGING_SOCKET_PATH must be an absolute path without whitespace"
+fi
+if ! grep -Fqx "socket_path = \"${STAGING_SOCKET_PATH}\"" "${STAGING_CONFIG}"; then
+  fail "staging config must select STAGING_SOCKET_PATH=${STAGING_SOCKET_PATH}"
 fi
 
-# swissquote-writer accepts the host and port separately, so validate and split the
-# required endpoint before constructing its argv. Keep the accepted form explicit.
-if [[ ! "${STAGING_ZMQ_ENDPOINT}" =~ ^tcp://([^[:space:]:]+):([0-9]+)$ ]]; then
-  fail "STAGING_ZMQ_ENDPOINT must be a tcp://host:port endpoint"
-fi
-ZMQ_HOST="${BASH_REMATCH[1]}"
-ZMQ_PORT="${BASH_REMATCH[2]}"
-if ((10#${ZMQ_PORT} < 1 || 10#${ZMQ_PORT} > 65535)); then
-  fail "STAGING_ZMQ_ENDPOINT port must be between 1 and 65535"
-fi
-if [[ "${ZMQ_HOST}" == "127.0.0.1" && $((10#${ZMQ_PORT})) -eq 5559 ]]; then
-  fail "STAGING_ZMQ_ENDPOINT selects the production endpoint (${PRODUCTION_ENDPOINT})"
-fi
-
-CMD=("${WRITER}" --config "${STAGING_CONFIG}" --host "${ZMQ_HOST}" --port "${ZMQ_PORT}")
+CMD=("${WRITER}" --config "${STAGING_CONFIG}")
 printf 'Command:'
 printf ' %q' "${CMD[@]}"
 printf '\n'
-printf 'staging endpoint: %s\n' "${STAGING_ZMQ_ENDPOINT}"
+printf 'staging SOCK_SEQPACKET socket: %s\n' "${STAGING_SOCKET_PATH}"
 printf 'staging config: %s\n' "${STAGING_CONFIG}"
+
 
 DRY_RUN="${DRY_RUN:-1}"
 RUN_STAGING="${RUN_STAGING:-0}"

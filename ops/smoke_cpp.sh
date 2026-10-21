@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Deterministic end-to-end smoke: local HTTP fixture -> C++ feed -> ZMQ -> C++ writer -> HTTP fixture.
+# Deterministic end-to-end smoke: local HTTP fixture -> C++ feed -> Unix SOCK_SEQPACKET -> C++ writer -> HTTP fixture.
 #
 # Prerequisites: a built swissquote-feed and swissquote-writer (the script checks
 # cpp/build first, then ${INSTALL_PREFIX}/bin), and Python 3 from the standard
 # library.  No Swissquote credentials, network access, ClickHouse installation,
-# or Python ZMQ package is required.  The feed's test-only
+# or Python messaging package is required. The feed's test-only
 # SWISSQUOTE_QUOTES_BASE_URL seam is pointed at the ephemeral local fixture.
 set -Eeuo pipefail
 
@@ -63,9 +63,8 @@ cleanup() {
 trap cleanup EXIT
 
 cat >"${CONFIG}" <<EOF
-[zmq]
-host = "127.0.0.1"
-port = 0
+[ipc]
+socket_path = "${TMP_DIR}/feed.sock"
 
 [logging]
 level = "DEBUG"
@@ -187,15 +186,7 @@ wait_for_file "${CLICKHOUSE_PORT_FILE}" "ClickHouse"
 QUOTE_PORT="$(<"${QUOTE_PORT_FILE}")"
 CLICKHOUSE_PORT="$(<"${CLICKHOUSE_PORT_FILE}")"
 
-# Port zero is not a valid feed override; choose another OS-free local port.
-ZMQ_PORT="$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()')"
-python3 - "${CONFIG}" "${ZMQ_PORT}" <<'PY'
-from pathlib import Path
-import sys
-path = Path(sys.argv[1])
-text = path.read_text()
-path.write_text(text.replace('port = 0', f'port = {int(sys.argv[2])}'))
-PY
+# The socket path is local to this smoke run, isolating concurrent invocations.
 
 CLICKHOUSE_HOST=127.0.0.1 \
 CLICKHOUSE_HTTP_PORT="${CLICKHOUSE_PORT}" \
@@ -233,7 +224,7 @@ for _ in $(seq 1 400); do
   sleep 0.05
 done
 if [[ ! -s "${CLICKHOUSE_DATA}" ]] || ! grep -q $'\tXAU/AUD\t' "${CLICKHOUSE_DATA}"; then
-  echo "ERROR: timed out waiting for C++ feed -> ZMQ -> writer -> XAU/AUD ClickHouse assertion" >&2
+  echo "ERROR: timed out waiting for C++ feed -> SOCK_SEQPACKET -> writer -> XAU/AUD ClickHouse assertion" >&2
   echo "--- feed ---" >&2
   cat "${FEED_LOG}" >&2 || true
   echo "--- writer ---" >&2
@@ -261,7 +252,7 @@ if row[2:5] != ["SwissquoteCapitalMarkets", "Live7", "prime"]:
     raise SystemExit(f"unexpected decoded metadata: {row[2:5]}")
 if not math.isclose(float(row[5]), 2000.0, rel_tol=0.0, abs_tol=1e-9):
     raise SystemExit(f"unexpected XAU/AUD bid: {row[5]}")
-print(f"ok  C++ feed -> ZMQ -> writer -> ClickHouse fixture rows={len(rows)} symbol=XAU/AUD")
+print(f"ok  C++ feed -> SOCK_SEQPACKET -> writer -> ClickHouse fixture rows={len(rows)} symbol=XAU/AUD")
 PY
 then
   echo "ERROR: decoded C++ writer payload failed deterministic assertion" >&2

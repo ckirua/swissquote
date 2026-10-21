@@ -7,12 +7,12 @@
 #include <span>
 #include <vector>
 
-namespace swissquote::zmq {
+namespace swissquote::ipc {
 
 class SpscBytesRing {
 public:
     SpscBytesRing(std::size_t capacity, std::size_t max_payload);
-    ~SpscBytesRing();
+    ~SpscBytesRing() = default;
 
     SpscBytesRing(const SpscBytesRing&) = delete;
     SpscBytesRing& operator=(const SpscBytesRing&) = delete;
@@ -35,11 +35,10 @@ private:
     std::size_t capacity_{};
     std::size_t mask_{};
     std::size_t max_payload_{};
-    std::size_t slot_bytes_{};
-    char* buf_{nullptr};
+    std::vector<std::vector<char>> slots_;
     std::atomic<std::size_t> head_{0};
     std::atomic<std::size_t> tail_{0};
     std::atomic<std::uint64_t> dropped_{0};
 };
 
-} // namespace swissquote::zmq
+} // namespace swissquote::ipc

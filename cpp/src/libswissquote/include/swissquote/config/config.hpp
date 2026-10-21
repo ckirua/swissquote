@@ -6,13 +6,10 @@
 
 namespace swissquote::config {
 
-[[nodiscard]] std::string validate_zmq_host(std::string_view host);
 [[nodiscard]] std::string validate_symbol(std::string_view symbol);
 
-struct ZmqConfig {
-    std::string host{"127.0.0.1"};
-    int port{5559};
-    [[nodiscard]] std::string endpoint() const;
+struct IpcConfig {
+    std::string socket_path{"/run/swissquote/feed.sock"};
 };
 
 struct LoggingConfig {
@@ -44,7 +41,7 @@ struct FeedConfig {
 };
 
 struct SwissquoteConfig {
-    ZmqConfig zmq;
+    IpcConfig ipc;
     LoggingConfig logging;
     ClickHouseConfig clickhouse;
     WriterConfig writer;
@@ -53,8 +50,7 @@ struct SwissquoteConfig {
 
 struct CliOverrides {
     std::string config_path;
-    std::string host;
-    int port{-1};
+    std::string socket_path;
     std::string log_level;
     std::string log_dir;
     int batch_size{-1};

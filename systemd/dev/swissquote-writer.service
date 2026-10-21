@@ -1,5 +1,5 @@
 [Unit]
-Description=Swissquote BBO writer (ZMQ SUB to ClickHouse)
+Description=Swissquote BBO writer (Unix SOCK_SEQPACKET subscriber to ClickHouse)
 After=network-online.target swissquote-feed.service
 Wants=network-online.target
 
@@ -11,7 +11,7 @@ Group=swissquote
 WorkingDirectory=/home/swissquote/projects/swissquote
 EnvironmentFile=-/home/swissquote/.env
 ExecStart=/home/swissquote/.local/bin/swissquote-writer \
-    --config /home/swissquote/.config/service.toml
+    --config /home/swissquote/projects/swissquote/systemd/dev/service.toml
 
 Restart=on-failure
 RestartSec=5

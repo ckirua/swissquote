@@ -20,12 +20,16 @@ if [[ "${STAGING}" == "1" ]]; then
   CONFIG_DIR="${CONFIG_DIR:-/etc/swissquote-staging}"
   STATE_DIR="${STATE_DIR:-/var/lib/swissquote-staging}"
   LOG_DIR="${LOG_DIR:-/var/log/swissquote-staging}"
+  RUN_DIRECTORY="${RUN_DIRECTORY:-swissquote-staging}"
+  SOCKET_PATH="${SOCKET_PATH:-/run/swissquote-staging/feed.sock}"
   UNIT_SUFFIX="${UNIT_SUFFIX:--staging}"
 else
   INSTALL_ROOT="${INSTALL_ROOT:-/opt/swissquote}"
   CONFIG_DIR="${CONFIG_DIR:-/etc/swissquote}"
   STATE_DIR="${STATE_DIR:-/var/lib/swissquote}"
   LOG_DIR="${LOG_DIR:-/var/log/swissquote}"
+  RUN_DIRECTORY="${RUN_DIRECTORY:-swissquote}"
+  SOCKET_PATH="${SOCKET_PATH:-/run/swissquote/feed.sock}"
   UNIT_SUFFIX="${UNIT_SUFFIX:-}"
 fi
 
@@ -39,7 +43,7 @@ FEED_BIN="${INSTALL_PREFIX}/bin/swissquote-feed"
 WRITER_BIN="${INSTALL_PREFIX}/bin/swissquote-writer"
 
 DEPLOY_MODE=prod
-export DEPLOY_MODE SERVICE_USER INSTALL_ROOT INSTALL_PREFIX CONFIG_DIR CONFIG_PATH ENV_PATH LOG_DIR STATE_DIR STATE_FILE
+export DEPLOY_MODE SERVICE_USER INSTALL_ROOT INSTALL_PREFIX CONFIG_DIR CONFIG_PATH ENV_PATH LOG_DIR STATE_DIR STATE_FILE SOCKET_PATH RUN_DIRECTORY
 export REPO_ROOT STAGING DRY_RUN FORCE SKIP_CLICKHOUSE WITH_LOCAL_CLICKHOUSE UNIT_SUFFIX FEED_UNIT WRITER_UNIT
 
 die() {

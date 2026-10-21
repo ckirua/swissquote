@@ -1,7 +1,7 @@
 add_executable(swissquote_tests
     test_codec.cpp
     test_validate.cpp
-    test_zmq.cpp
+    test_ipc.cpp
     test_weekend_pause.cpp
     test_ingest.cpp
 )

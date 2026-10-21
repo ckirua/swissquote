@@ -2,7 +2,7 @@
 Swissquote BBO receiver example (Cython SBE decode).
 
 Requires swissquote-feed running (systemd or manual):
-    ~/.local/bin/swissquote-feed --host 127.0.0.1 --port 5559
+    ~/.local/bin/swissquote-feed
 """
 
 from __future__ import annotations
@@ -13,16 +13,16 @@ from swissquote import BboSubscriber, flatten_bbo_rows
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Swissquote BBO receiver (ZMQ SUB, SBE)")
-    parser.add_argument("--endpoint", default="tcp://127.0.0.1:5559")
+    parser = argparse.ArgumentParser(description="Swissquote BBO receiver (Unix socket, SBE)")
+    parser.add_argument("--socket-path", default="/run/swissquote/feed.sock")
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
     count = 0
-    with BboSubscriber(args.endpoint) as sub:
-        print(f"connected to {sub.endpoint}")
+    with BboSubscriber(args.socket_path) as sub:
+        print(f"connected to {sub.socket_path}")
         print("waiting for SBE messages (Ctrl+C to stop)")
         try:
             while True:

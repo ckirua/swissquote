@@ -1,41 +1,59 @@
-"""ZMQ subscriber for the C++ BBO feed."""
+"""Unix-domain SOCK_SEQPACKET subscriber for the C++ BBO feed."""
 
 from __future__ import annotations
 
-import zmq
+import select
+import socket
+
+_MAX_FRAME_SIZE = 65_536
 
 
 class BboSubscriber:
-    """Subscribe to raw SBE frames from swissquote-feed."""
+    """Receive raw SBE frames from swissquote-feed over a Unix socket."""
 
-    def __init__(self, endpoint: str = "tcp://127.0.0.1:5559") -> None:
-        self._endpoint = endpoint
-        self._ctx = zmq.Context.instance()
-        self._socket = self._ctx.socket(zmq.SUB)
-        self._socket.setsockopt(zmq.LINGER, 0)
-        self._socket.setsockopt(zmq.SUBSCRIBE, b"")
-        self._open = False
+    def __init__(self, socket_path: str = "/run/swissquote/feed.sock") -> None:
+        self._socket_path = socket_path
+        self._socket: socket.socket | None = None
 
     @property
-    def endpoint(self) -> str:
-        return self._endpoint
+    def socket_path(self) -> str:
+        return self._socket_path
 
     def start(self) -> None:
-        if not self._open:
-            self._socket.connect(self._endpoint)
-            self._open = True
+        if self._socket is not None:
+            return
+        client = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET)
+        try:
+            client.connect(self._socket_path)
+        except OSError:
+            client.close()
+            raise
+        self._socket = client
 
     def recv_frame(self, timeout_ms: int = 1000) -> bytes | None:
-        if not self._open:
-            self.start()
-        if self._socket.poll(timeout_ms) == 0:
+        if self._socket is None:
+            try:
+                self.start()
+            except OSError:
+                return None
+        assert self._socket is not None
+        readable, _, _ = select.select([self._socket], [], [], timeout_ms / 1000)
+        if not readable:
             return None
-        return self._socket.recv()
+        try:
+            frame = self._socket.recv(_MAX_FRAME_SIZE)
+        except OSError:
+            self.close()
+            return None
+        if not frame:
+            self.close()
+            return None
+        return frame
 
     def close(self) -> None:
-        if self._open:
-            self._socket.close(linger=0)
-            self._open = False
+        if self._socket is not None:
+            self._socket.close()
+            self._socket = None
 
     def __enter__(self) -> BboSubscriber:
         self.start()
@@ -46,3 +64,5 @@ class BboSubscriber:
 
 
 __all__: list[str] = ["BboSubscriber"]
+
+

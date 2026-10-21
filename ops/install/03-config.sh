@@ -6,16 +6,10 @@ require_root
 
 TEMPLATE="${REPO_ROOT}/python/config.example.toml"
 [[ -f "${TEMPLATE}" ]] || die "missing ${TEMPLATE}"
-
-ZMQ_PORT=5559
-if [[ "${STAGING}" == "1" ]]; then
-  ZMQ_PORT=5560
-fi
-
 sed \
   -e "s|/home/swissquote/.local/log|${LOG_DIR}|g" \
   -e "s|/home/swissquote/.config/service.toml|${CONFIG_PATH}|g" \
-  -e "s|port = 5559|port = ${ZMQ_PORT}|g" \
+  -e "s|socket_path = \"/run/swissquote/feed.sock\"|socket_path = \"${SOCKET_PATH}\"|g" \
   "${TEMPLATE}" >"${CONFIG_PATH}.tmp"
 install -m 600 -o "${SERVICE_USER}" -g "${SERVICE_USER}" "${CONFIG_PATH}.tmp" "${CONFIG_PATH}"
 rm -f "${CONFIG_PATH}.tmp"

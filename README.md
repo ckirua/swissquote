@@ -1,6 +1,6 @@
 # Swissquote
 
-Swissquote Data Low-Latency Engine — HTTP quotes → SBE encode → ZMQ PUB → decode → ClickHouse.
+Swissquote Data Low-Latency Engine — HTTP quotes → SBE encode → Unix socket feed → decode → ClickHouse.
 
 Production services run on the **C++ engine** under [`cpp/`](cpp/). Use the **Python client** in [`python/`](python/) to subscribe, fetch quotes, and query ClickHouse (Cython decode, no server build).
 
@@ -21,18 +21,25 @@ pip install -e ".[databases]"
 pytest tests/ -q
 ```
 
+The feed subscriber uses a Unix-domain `SOCK_SEQPACKET` socket. The default
+path is `/run/swissquote/feed.sock`; override it with `--socket-path`:
+
+```bash
+python scripts/examples/receiver.py --socket-path /run/swissquote/feed.sock
+```
+
 See [`python/README.md`](python/README.md) for subscribe, REST, and ClickHouse examples.
 
 ## Dev deploy (home tree)
 
 Use this on a developer machine with a git checkout under `~/projects/swissquote`.
 
-Prerequisites: `cmake`, `g++` (13+), `libzmq3-dev`, `libssl-dev`, `~/.config/service.toml`, `~/.env` with `CLICKHOUSE_HOST`.
+Prerequisites: `cmake`, `g++` (13+), `libssl-dev`, `python3`, `~/.config/service.toml`, `~/.env` with `CLICKHOUSE_HOST`.
 
 ```bash
 bash ops/deploy-check.sh              # preflight (no root)
 sudo bash ops/deploy.sh               # build → ~/.local/bin, dev systemd units
-bash ops/smoke_cpp.sh                 # ZMQ + decode smoke
+bash ops/smoke_cpp.sh                 # Unix IPC + decode smoke
 ```
 
 | Unit | Binary |
@@ -51,7 +58,7 @@ Prod installs to `/opt/swissquote` with config in `/etc/swissquote`. Each epoch 
 # Dry-run preflight (read-only)
 sudo bash install.sh --dry-run
 
-# Staging on same host (does not touch live units; ZMQ port 5560)
+# Staging on same host (does not touch live units)
 sudo bash install.sh --staging --skip-clickhouse \
   --env-file /home/swissquote/.env
 
@@ -90,12 +97,14 @@ Logs: `journalctl -u swissquote-feed -f` / `journalctl -u swissquote-writer -f`
 
 The production writer emits an INFO diagnostics summary once per minute:
 `journalctl -u swissquote-writer -f`. It reports enqueued/consumed frame rates,
-ClickHouse-accepted row rate, sampled ZMQ queue depth, queue push attempt failures
+ClickHouse-accepted row rate, sampled IPC queue depth, queue push attempt failures
 (including retries; not necessarily lost frames), frame size, decode/rejection
 counts, flush results, and decode/materialization/serialization/HTTP timings.
 With async inserts enabled, successful HTTP acceptance does not mean ClickHouse
-has finished inserting the rows. Startup logs the ZMQ ring's configured
-allocation capacity; this is not the same as resident memory.
+has finished inserting the rows. The subscriber and publisher queues hold up to 2048
+frames each. Slot buffers grow lazily to frame size and are reused; startup
+does not reserve the theoretical 128 MiB maximum per ring. Under a full backlog
+of maximum-size frames, each ring can still grow to that bound.
 
 The C++ writer uses ClickHouse **HTTP on port 8123** (set `CLICKHOUSE_HTTP_PORT` in env file).
 
@@ -145,8 +154,8 @@ script and timer alongside the C++ release.
 ## Examples (manual)
 
 ```bash
-~/.local/bin/swissquote-feed --host 127.0.0.1 --port 5559
-~/.local/bin/swissquote-writer --host 127.0.0.1 --port 5559
-python python/scripts/examples/receiver.py
+~/.local/bin/swissquote-feed
+~/.local/bin/swissquote-writer
+python python/scripts/examples/receiver.py --socket-path /run/swissquote/feed.sock
 python python/scripts/examples/fetch_bbo.py --symbol EUR/USD
 ```

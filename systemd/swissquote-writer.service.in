@@ -1,5 +1,5 @@
 [Unit]
-Description=Swissquote BBO writer (ZMQ SUB to ClickHouse) @INSTALL_ROOT@
+Description=Swissquote BBO writer (Unix SOCK_SEQPACKET subscriber to ClickHouse) @INSTALL_ROOT@
 After=network-online.target @FEED_UNIT@
 Wants=network-online.target
 
