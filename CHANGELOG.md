@@ -6,6 +6,9 @@ All notable changes to the Swissquote C++26 engine and Python client follow
 ## [Unreleased]
 
 ### Added
+- `ops/smoke_cpp.sh --profile DURATION_SECONDS` runs a sustained local
+  feed-to-ClickHouse fixture with production-like writer settings and retains
+  profile artifacts under `/tmp`.
 - Daily ClickHouse-to-S3 Parquet archive for Swissquote BBO, scheduled at 06:00 UTC.
 
 ### Changed
