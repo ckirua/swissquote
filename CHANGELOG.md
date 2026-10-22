@@ -12,6 +12,8 @@ All notable changes to the Swissquote C++26 engine and Python client follow
 - Production C++ codec now uses the generated SBE headers from `sbe/generated/` for frame encoding and decoding; wire layout and compatibility tests remain unchanged.
 - Writer now reserves configured batch capacity and reuses ClickHouse TSV payload storage across flushes; retained normal-batch materialization measured 3 allocations versus 8 for a fresh batch.
 - Removed the ZeroMQ transport and dependency; feed, writer, and Python subscribers now exchange complete SBE frames over a local Unix-domain SOCK_SEQPACKET socket.
+- TSV serialization now emits UTC timestamp digits directly instead of parsing
+  a `std::format` pattern for every row.
 
 - The optional shared-memory IPC benchmark acknowledges verified frames before
   the next publish so its full-size UDS case measures delivered frames rather

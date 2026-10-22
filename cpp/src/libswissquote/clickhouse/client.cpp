@@ -44,6 +44,29 @@ std::string escape_field(std::string_view value) {
     return out;
 }
 
+namespace {
+template <typename Integer>
+void append_zero_padded(std::string& out, Integer value, std::size_t width) {
+    char buffer[32];
+    const auto result = std::to_chars(std::begin(buffer), std::end(buffer), value);
+    if (result.ec != std::errc{}) {
+        throw std::runtime_error("failed to format ClickHouse timestamp");
+    }
+    const bool negative = buffer[0] == '-';
+    const char* digits = buffer + (negative ? 1 : 0);
+    const auto digit_count = static_cast<std::size_t>(result.ptr - digits);
+    const auto sign_width = static_cast<std::size_t>(negative);
+    const auto padding = width > digit_count + sign_width
+        ? width - digit_count - sign_width
+        : 0;
+    if (negative) {
+        out.push_back('-');
+    }
+    out.append(padding, '0');
+    out.append(digits, digit_count);
+}
+} // namespace
+
 void append_ts_ms(std::string& out, std::int64_t ts_ms) {
     const std::chrono::sys_time<std::chrono::milliseconds> tp{std::chrono::milliseconds(ts_ms)};
     const std::time_t tt = std::chrono::system_clock::to_time_t(
@@ -51,16 +74,19 @@ void append_ts_ms(std::string& out, std::int64_t ts_ms) {
     const auto ms = ts_ms % 1000;
     std::tm tm{};
     gmtime_r(&tt, &tm);
-    std::format_to(
-        std::back_inserter(out),
-        "{:04d}-{:02d}-{:02d} {:02d}:{:02d}:{:02d}.{:03d}",
-        tm.tm_year + 1900,
-        tm.tm_mon + 1,
-        tm.tm_mday,
-        tm.tm_hour,
-        tm.tm_min,
-        tm.tm_sec,
-        ms);
+    append_zero_padded(out, tm.tm_year + 1900, 4);
+    out.push_back('-');
+    append_zero_padded(out, tm.tm_mon + 1, 2);
+    out.push_back('-');
+    append_zero_padded(out, tm.tm_mday, 2);
+    out.push_back(' ');
+    append_zero_padded(out, tm.tm_hour, 2);
+    out.push_back(':');
+    append_zero_padded(out, tm.tm_min, 2);
+    out.push_back(':');
+    append_zero_padded(out, tm.tm_sec, 2);
+    out.push_back('.');
+    append_zero_padded(out, ms, 3);
 }
 
 void append_escaped_field(std::string& out, std::string_view value) {
