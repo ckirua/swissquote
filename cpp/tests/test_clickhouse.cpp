@@ -2,11 +2,9 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <string>
-#include <vector>
-
 TEST_CASE("ClickHouse TSV serialization preserves UTC timestamp layout") {
-    const std::vector<swissquote::codec::BboRow> rows{{
+    swissquote::ingest::RowBuffer rows;
+    rows.append(swissquote::codec::BboRowView{
         .ts_ms = 1577934245006,
         .symbol = "EUR/USD",
         .platform = "SwissquoteCapitalMarkets",
@@ -16,7 +14,7 @@ TEST_CASE("ClickHouse TSV serialization preserves UTC timestamp layout") {
         .ask_price = 1.23486,
         .bid_spread = 0.4F,
         .ask_spread = 0.4F,
-    }};
+    });
 
     CHECK(swissquote::clickhouse::serialize_rows_tsv(rows)
           == "2020-01-02 03:04:05.006\tEUR/USD\tSwissquoteCapitalMarkets\tLive7\tprime"

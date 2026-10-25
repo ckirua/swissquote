@@ -17,6 +17,11 @@ All notable changes to the Swissquote C++26 engine and Python client follow
 - Removed the ZeroMQ transport and dependency; feed, writer, and Python subscribers now exchange complete SBE frames over a local Unix-domain SOCK_SEQPACKET socket.
 - TSV serialization now emits UTC timestamp digits directly instead of parsing
   a `std::format` pattern for every row.
+- Experimental arena-backed writer batches own borrowed frame strings using
+  offsets and reuse storage after flushes. Retained materialization allocated
+  zero times in local normal/large benchmarks. Five paired real-quote runs showed
+  a 2.83% median cycles/row reduction, below the noise gate; the change remains
+  experimental. Ownership, growth, clearing, and TSV compatibility are covered.
 
 - The optional shared-memory IPC benchmark acknowledges verified frames before
   the next publish so its full-size UDS case measures delivered frames rather

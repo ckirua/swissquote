@@ -75,21 +75,33 @@ frames to 65,536 bytes. The feed broadcasts each SBE frame as one
 `AF_UNIX/SOCK_SEQPACKET` message to connected local consumers; slow clients are
 disconnected rather than blocking feed workers.
 
-The remaining writer cost is intentional ownership conversion from borrowed
-frame views into batch-owned strings, followed by ClickHouse TSV serialization.
-Those steps span frames and retries, so they cannot be removed without changing
-batch ownership semantics.
+The writer copies borrowed frame strings into a batch-owned byte arena.
+Rows keep offsets rather than pointers, so arena growth does not invalidate
+stored rows. `RowBuffer::view()` resolves borrowed strings for serialization;
+those views must not survive a buffer mutation. `clear()` retains row and arena
+capacity for reuse, and failed inserts retain the owned batch for retries.
 
-Writer benchmark reference from a Release build:
+Release writer benchmark allocation counts (normal: 9 rows; large: 216 rows):
 
-```text
-materialization allocations/batch: fresh_normal=8 retained_normal=3
-materialization allocations/batch: fresh_large=81 retained_large=72
-```
+| Materialization | Previous normal | Arena normal | Previous large | Arena large |
+| --- | ---: | ---: | ---: | ---: |
+| Fresh batch | 8 | 11 | 81 | 20 |
+| Retained batch | 3 | 0 | 72 | 0 |
 
-The production ClickHouse client retains its TSV payload buffer between
-successful or failed insert attempts. Row ownership remains batch-owned so
-failed inserts can be retried safely.
+Fresh small batches allocate more with the arena; the production writer retains
+its batch storage. An isolated weekend real-quote experiment used one feed and
+two writers with disposable ClickHouse tables. Across five matched runs, each
+writer inserted 9,396 rows per run with identical distinct quote values and
+zero rejected rows or decode errors. Arena cycles/row were lower in 4/5 runs:
+the median fell from 13,323.73 to 12,946.75 (2.83%), but the reduction of
+376.98 cycles/row was below twice the baseline MAD (891.26 cycles/row).
+This fails the noise gate; the arena remains experimental, not a demonstrated
+production CPU improvement. Three separate 60-second stack captures per process
+were sparse, and the baseline writers consumed only 213 ms of CPU across all
+five counter runs. No further application hotspot was selected.
+
+The ClickHouse client retains its TSV payload buffer between successful or
+failed insert attempts; wire fields, precision, and UTC timestamps are unchanged.
 
 Run the deterministic reusable-path allocation regression (it exits nonzero
 if either reusable operation allocates after warmup):

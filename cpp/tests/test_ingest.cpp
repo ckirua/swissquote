@@ -1,6 +1,11 @@
+#include <swissquote/clickhouse/client.hpp>
 #include <swissquote/ingest/flush_retry_policy.hpp>
+#include <swissquote/ingest/row_buffer.hpp>
 
 #include <catch2/catch_test_macros.hpp>
+
+#include <string>
+#include <string_view>
 
 using swissquote::ingest::FlushRetryPolicy;
 
@@ -58,4 +63,92 @@ TEST_CASE("flush retry permits one forced final attempt", "[ingest][retry]") {
 
     CHECK_FALSE(policy.should_attempt(200.5));
     CHECK(policy.should_attempt(200.5, true));
+}
+
+TEST_CASE("row buffer owns source bytes and serializes stable views", "[ingest][row-buffer]") {
+    std::string symbol = "EUR\tUSD";
+    std::string platform = "plat\nform";
+    std::string server = "srv\\x";
+    std::string spread_profile = "raw";
+    swissquote::ingest::RowBuffer buffer;
+    buffer.reserve(1);
+    buffer.append(swissquote::codec::BboRowView{
+        .ts_ms = 1704067200123,
+        .symbol = symbol,
+        .platform = platform,
+        .server = server,
+        .spread_profile = spread_profile,
+        .bid_price = 1.234567,
+        .ask_price = 2.345678,
+        .bid_spread = 0.1F,
+        .ask_spread = 0.2F,
+    });
+
+    symbol = "changed";
+    platform = "changed";
+    server = "changed";
+    spread_profile = "changed";
+
+    const auto expected =
+        "2024-01-01 00:00:00.123\tEUR\\\tUSD\tplat\\\nform\tsrv\\\\x\traw\t"
+        "1.23457\t2.34568\t0.1\t0.2\n";
+    CHECK(swissquote::clickhouse::serialize_rows_tsv(buffer) == expected);
+    CHECK(swissquote::clickhouse::serialize_rows_tsv(buffer) == expected);
+    CHECK(buffer.view(0).symbol == "EUR\tUSD");
+}
+
+TEST_CASE("row buffer clear retains an independent empty batch", "[ingest][row-buffer]") {
+    swissquote::ingest::RowBuffer buffer;
+    buffer.append(swissquote::codec::BboRowView{
+        .ts_ms = 1704067200123,
+        .symbol = "old",
+        .platform = "old",
+        .server = "old",
+        .spread_profile = "old",
+    });
+    buffer.clear();
+    CHECK(buffer.size() == 0);
+
+    buffer.append(swissquote::codec::BboRowView{
+        .ts_ms = 1704067201123,
+        .symbol = "new",
+        .platform = "new",
+        .server = "new",
+        .spread_profile = "new",
+    });
+    CHECK(buffer.size() == 1);
+    CHECK(swissquote::clickhouse::serialize_rows_tsv(buffer) ==
+          "2024-01-01 00:00:01.123\tnew\tnew\tnew\tnew\t0\t0\t0\t0\n");
+}
+
+TEST_CASE("row buffer preserves earlier rows across arena and row growth", "[ingest][row-buffer]") {
+    swissquote::ingest::RowBuffer buffer;
+    buffer.reserve(1);
+    for (int index = 0; index < 256; ++index) {
+        const auto symbol = std::string(128, 'S') + std::to_string(index);
+        buffer.append(swissquote::codec::BboRowView{
+            .ts_ms = 1704067200000 + index,
+            .symbol = symbol,
+            .platform = "SwissquoteCapitalMarkets",
+            .server = {},
+            .spread_profile = "prime",
+            .bid_price = 1.25,
+            .ask_price = 1.5,
+            .bid_spread = 0.25F,
+            .ask_spread = 0.5F,
+        });
+    }
+    REQUIRE(buffer.size() == 256);
+    for (int index = 0; index < 256; ++index) {
+        const auto row = buffer.view(index);
+        CHECK(row.ts_ms == 1704067200000 + index);
+        CHECK(row.symbol == std::string(128, 'S') + std::to_string(index));
+        CHECK(row.platform == "SwissquoteCapitalMarkets");
+        CHECK(row.server.empty());
+        CHECK(row.spread_profile == "prime");
+        CHECK(row.bid_price == 1.25);
+        CHECK(row.ask_price == 1.5);
+        CHECK(row.bid_spread == 0.25F);
+        CHECK(row.ask_spread == 0.5F);
+    }
 }
