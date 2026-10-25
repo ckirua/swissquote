@@ -46,6 +46,9 @@ For a sustained isolated fixture run, use `ops/smoke_cpp.sh --profile SECONDS`.
 It verifies continued row growth and feed/writer health while retaining run
 artifacts under `/tmp/swissquote-cpu-profile.*`.
 
+Each profile directory includes `profile-pids.tsv`. Set `SWISSQUOTE_BUILD_DIR`
+to select an isolated build directory; the default is `cpp/build`.
+
 
 | Unit | Binary |
 |------|--------|

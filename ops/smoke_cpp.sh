@@ -30,8 +30,9 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 INSTALL_PREFIX="${INSTALL_PREFIX:-${HOME}/.local}"
 FEED_INSTALL="${INSTALL_PREFIX}/bin/swissquote-feed"
 WRITER_INSTALL="${INSTALL_PREFIX}/bin/swissquote-writer"
-FEED_BUILD="${REPO_ROOT}/cpp/build/swissquote-feed"
-WRITER_BUILD="${REPO_ROOT}/cpp/build/swissquote-writer"
+BUILD_DIR="${SWISSQUOTE_BUILD_DIR:-${REPO_ROOT}/cpp/build}"
+FEED_BUILD="${BUILD_DIR}/swissquote-feed"
+WRITER_BUILD="${BUILD_DIR}/swissquote-writer"
 
 if [[ -x "${FEED_BUILD}" ]]; then
   FEED_BIN="${FEED_BUILD}"
@@ -253,6 +254,9 @@ CLICKHOUSE_HTTP_PORT="${CLICKHOUSE_PORT}" \
 DOTENV_PATH="${TMP_DIR}/missing.env" \
 "${FEED_BIN}" --config "${CONFIG}" >"${FEED_LOG}" 2>&1 &
 FEED_PID=$!
+if (( PROFILE_MODE )); then
+  printf 'feed\t%s\nwriter\t%s\n' "${FEED_PID}" "${WRITER_PID}" >"${TMP_DIR}/profile-pids.tsv"
+fi
 
 for _ in $(seq 1 400); do
   if [[ -s "${CLICKHOUSE_DATA}" ]] && grep -q $'\tXAU/AUD\t' "${CLICKHOUSE_DATA}"; then
