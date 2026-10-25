@@ -11,9 +11,12 @@ namespace swissquote::ingest {
 class RowBuffer {
 public:
     void reserve(std::size_t capacity);
+    // Copies borrowed frame strings into batch-owned storage.
+    // Input strings must not refer to this buffer's own arena.
     void append(const codec::BboRowView& row);
     void clear();
     [[nodiscard]] std::size_t size() const noexcept { return rows_.size(); }
+    // Requires index < size(); views expire on mutation or destruction.
     [[nodiscard]] codec::BboRowView view(std::size_t index) const noexcept;
 
 private:

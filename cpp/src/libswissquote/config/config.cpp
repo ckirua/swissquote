@@ -5,7 +5,6 @@
 #include <algorithm>
 #include <cstdlib>
 #include <filesystem>
-#include <format>
 #include <fstream>
 #include <stdexcept>
 
@@ -69,12 +68,9 @@ void load_dotenv() {
 
 SwissquoteConfig from_toml(const toml::table& table) {
     SwissquoteConfig cfg;
-    if (auto* zmq = table["zmq"].as_table()) {
-        if (auto v = (*zmq)["host"].value<std::string>()) {
-            cfg.zmq.host = validate_zmq_host(*v);
-        }
-        if (auto v = (*zmq)["port"].value<int64_t>()) {
-            cfg.zmq.port = static_cast<int>(*v);
+    if (auto* ipc = table["ipc"].as_table()) {
+        if (auto v = (*ipc)["socket_path"].value<std::string>()) {
+            cfg.ipc.socket_path = *v;
         }
     }
     if (auto* logging = table["logging"].as_table()) {
@@ -126,13 +122,6 @@ SwissquoteConfig from_toml(const toml::table& table) {
 
 } // namespace
 
-std::string validate_zmq_host(std::string_view host) {
-    const std::string normalized(host);
-    if (normalized == "0.0.0.0" || normalized == "::" || normalized == "*" || normalized.empty()) {
-        throw std::invalid_argument("unsafe zmq host: bind to 127.0.0.1 for local-only access");
-    }
-    return normalized;
-}
 
 std::string validate_symbol(std::string_view symbol) {
     if (symbol.size() < 7 || symbol.size() > 13) {
@@ -149,9 +138,6 @@ std::string validate_symbol(std::string_view symbol) {
     return std::string(symbol);
 }
 
-std::string ZmqConfig::endpoint() const {
-    return std::format("tcp://{}:{}", host, port);
-}
 
 SwissquoteConfig load_config(const CliOverrides& cli) {
     load_dotenv();
@@ -165,11 +151,8 @@ SwissquoteConfig load_config(const CliOverrides& cli) {
         cfg = from_toml(toml::parse_file(config_path.string()));
     }
 
-    if (!cli.host.empty()) {
-        cfg.zmq.host = validate_zmq_host(cli.host);
-    }
-    if (cli.port >= 0) {
-        cfg.zmq.port = cli.port;
+    if (!cli.socket_path.empty()) {
+        cfg.ipc.socket_path = cli.socket_path;
     }
     if (!cli.log_level.empty()) {
         cfg.logging.level = cli.log_level;

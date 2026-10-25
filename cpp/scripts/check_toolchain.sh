@@ -32,14 +32,15 @@ if [[ "${ok}" -eq 0 ]]; then
   exit 1
 fi
 
-if ! pkg-config --exists libzmq; then
-  echo "ERROR: libzmq not found (install libzmq3-dev)" >&2
-  exit 1
-fi
-echo "ok  libzmq"
 
 if ! command -v cmake >/dev/null 2>&1; then
   echo "ERROR: cmake not found" >&2
   exit 1
 fi
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "ERROR: python3 not found (required for IPC config migration and smoke)" >&2
+  exit 1
+fi
+echo "ok  python3 $(python3 --version 2>&1 | awk '{print $2}')"
 echo "ok  cmake $(cmake --version | head -1 | awk '{print $3}')"
+

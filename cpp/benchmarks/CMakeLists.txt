@@ -12,6 +12,9 @@ if(SWISSQUOTE_BUILD_BENCHMARKS)
     target_include_directories(swissquote_benchmarks PRIVATE
         "${CMAKE_SOURCE_DIR}/tests"
     )
+    add_executable(swissquote_ipc_benchmark benchmark_ipc.cpp)
+    target_link_libraries(swissquote_ipc_benchmark PRIVATE swissquote_lib)
+
 endif()
 
 if(SWISSQUOTE_BUILD_CODEC_BENCHMARK)

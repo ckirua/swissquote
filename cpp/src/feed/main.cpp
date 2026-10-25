@@ -5,7 +5,7 @@
 #include "swissquote/util/logging.hpp"
 #include "swissquote/util/weekend_pause.hpp"
 #include "swissquote/version.hpp"
-#include "swissquote/zmq/pub.hpp"
+#include "swissquote/ipc/unix_pub.hpp"
 
 #include <CLI/CLI.hpp>
 
@@ -120,11 +120,10 @@ private:
 
 int main(int argc, char** argv) {
     swissquote::config::CliOverrides cli;
-    CLI::App app{"swissquote-feed — HTTP quotes → SBE → ZMQ PUB"};
+    CLI::App app{"swissquote-feed — HTTP quotes → SBE → Unix IPC"};
     app.set_version_flag("-v,--version", SWISSQUOTE_VERSION);
     app.add_option("--config", cli.config_path, "path to service.toml");
-    app.add_option("--host", cli.host, "ZMQ bind host");
-    app.add_option("--port", cli.port, "ZMQ port");
+    app.add_option("--socket-path", cli.socket_path, "Unix-domain seqpacket socket path");
     app.add_option("--log-level", cli.log_level, "log level");
     app.add_option("--log-dir", cli.log_dir, "log directory");
     CLI11_PARSE(app, argc, argv);
@@ -135,9 +134,9 @@ int main(int argc, char** argv) {
     std::signal(SIGINT, on_signal);
     std::signal(SIGTERM, on_signal);
 
-    swissquote::zmq::ThreadedZmqPub pub(cfg.zmq.endpoint());
+    swissquote::ipc::ThreadedUnixSeqpacketPub pub(cfg.ipc.socket_path);
     pub.start();
-    swissquote::util::log_info(std::format("publishing on {}", cfg.zmq.endpoint()));
+    swissquote::util::log_info(std::format("publishing on Unix socket {}", cfg.ipc.socket_path));
     if (cfg.feed.weekend_pause) {
         swissquote::util::log_info(
             "weekend_pause enabled: skip REST polls Fri 16:55–Sun 16:50 America/New_York");
@@ -157,7 +156,7 @@ int main(int argc, char** argv) {
         const auto cycle_start = std::chrono::steady_clock::now();
         try {
             if (!pub.is_healthy()) {
-                throw std::runtime_error("zmq pub worker is not healthy");
+                throw std::runtime_error("Unix IPC publisher is not healthy");
             }
 
             const auto now = std::chrono::system_clock::now();
@@ -251,11 +250,14 @@ int main(int argc, char** argv) {
             workers.wait_idle();
 
             const auto stats = pub.stats();
-            if (stats.dropped_queue || stats.dropped_zmq) {
+            if (stats.dropped_queue || stats.dropped_no_client || stats.dropped_clients
+                || stats.send_errors) {
                 swissquote::util::log_warn(std::format(
-                    "zmq drops: queue={} zmq={}",
+                    "Unix IPC drops: queue={} no_client={} client={} send_errors={}",
                     stats.dropped_queue,
-                    stats.dropped_zmq));
+                    stats.dropped_no_client,
+                    stats.dropped_clients,
+                    stats.send_errors));
             }
             swissquote::util::log_info(std::format("published cycle for {} symbols", symbols.size()));
             swissquote::util::log_debug(

@@ -5,9 +5,8 @@
 # C++ writer uses ClickHouse HTTP (port 8123 by default). Override with
 # CLICKHOUSE_HTTP_PORT in ~/.env if needed.
 
-[zmq]
-host = "127.0.0.1"
-port = 5559
+[ipc]
+socket_path = "/run/swissquote/feed.sock"
 
 [logging]
 level = "INFO"

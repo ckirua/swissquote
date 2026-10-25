@@ -12,7 +12,8 @@ cmake -S "${INSTALL_ROOT}/cpp" -B "${BUILD_DIR}" \
 cmake --build "${BUILD_DIR}" -j"$(nproc)"
 cmake --install "${BUILD_DIR}"
 
-chown root:"${SERVICE_USER}" "${FEED_BIN}" "${WRITER_BIN}"
-chmod 750 "${FEED_BIN}" "${WRITER_BIN}"
+chown root:"${SERVICE_USER}" "${INSTALL_PREFIX}/bin" "${FEED_BIN}" "${WRITER_BIN}"
+chmod 750 "${INSTALL_PREFIX}/bin" "${FEED_BIN}" "${WRITER_BIN}"
+python3 "${INSTALL_ROOT}/ops/install/migrate_ipc_config.py" "${CONFIG_PATH}" "${SOCKET_PATH}"
 
 log "binaries installed"

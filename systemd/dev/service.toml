@@ -1,0 +1,2 @@
+[ipc]
+socket_path = "/run/swissquote-dev/feed.sock"

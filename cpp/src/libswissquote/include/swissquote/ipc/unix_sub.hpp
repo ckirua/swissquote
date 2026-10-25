@@ -4,16 +4,17 @@
 #include <chrono>
 #include <condition_variable>
 #include <cstdint>
+#include <exception>
 #include <mutex>
 #include <optional>
-#include <string>
 #include <span>
+#include <string>
 #include <thread>
 #include <vector>
 
-#include "swissquote/zmq/spsc_ring.hpp"
+#include "swissquote/ipc/spsc_ring.hpp"
 
-namespace swissquote::zmq {
+namespace swissquote::ipc {
 
 struct SubStats {
     std::uint64_t received{};
@@ -22,18 +23,17 @@ struct SubStats {
     std::size_t queue_size{};
 };
 
-class ThreadedZmqSub {
+class ThreadedUnixSeqpacketSub {
 public:
-    static constexpr int kRingCapacity = 8192;
+    static constexpr std::size_t kRingCapacity = 2048;
     static constexpr std::size_t kMaxPayload = 65536;
-    static constexpr int kSocketHwm = 8192;
     static constexpr double kStartupTimeoutSec = 5.0;
 
-    explicit ThreadedZmqSub(std::string endpoint);
-    ~ThreadedZmqSub();
+    explicit ThreadedUnixSeqpacketSub(std::string socket_path);
+    ~ThreadedUnixSeqpacketSub();
 
-    ThreadedZmqSub(const ThreadedZmqSub&) = delete;
-    ThreadedZmqSub& operator=(const ThreadedZmqSub&) = delete;
+    ThreadedUnixSeqpacketSub(const ThreadedUnixSeqpacketSub&) = delete;
+    ThreadedUnixSeqpacketSub& operator=(const ThreadedUnixSeqpacketSub&) = delete;
 
     void start(double timeout_sec = kStartupTimeoutSec);
     void close();
@@ -58,7 +58,9 @@ public:
                 return false;
             }
             std::unique_lock lock(wake_mu_);
-            wake_cv_.wait_for(lock, std::chrono::milliseconds(1));
+            wake_cv_.wait_until(lock, deadline, [this] {
+                return ring_.size_approx() > 0 || !running_.load(std::memory_order_relaxed);
+            });
         }
     }
 
@@ -67,9 +69,8 @@ public:
 
 private:
     void worker();
-    bool recv_available(void* socket);
 
-    std::string endpoint_;
+    std::string socket_path_;
     SpscBytesRing ring_{kRingCapacity, kMaxPayload};
     std::thread thread_;
     std::atomic<bool> running_{false};
@@ -79,11 +80,8 @@ private:
     std::atomic<std::uint64_t> received_{0};
     std::atomic<std::uint64_t> recv_errors_{0};
     std::exception_ptr worker_error_;
-
-    bool pending_push_{false};
-    std::vector<std::byte> pending_frame_;
     std::mutex wake_mu_;
     std::condition_variable wake_cv_;
 };
 
-} // namespace swissquote::zmq
+} // namespace swissquote::ipc

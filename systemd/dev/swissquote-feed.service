@@ -1,5 +1,5 @@
 [Unit]
-Description=Swissquote BBO feed (ZMQ PUB)
+Description=Swissquote BBO feed (Unix SOCK_SEQPACKET publisher)
 After=network-online.target
 Wants=network-online.target
 
@@ -7,11 +7,12 @@ Wants=network-online.target
 Type=simple
 User=swissquote
 Group=swissquote
-
-WorkingDirectory=/home/swissquote/projects/swissquote
-EnvironmentFile=-/home/swissquote/.env
+RuntimeDirectory=swissquote-dev
+RuntimeDirectoryMode=0750
+UMask=0007
 ExecStart=/home/swissquote/.local/bin/swissquote-feed \
-    --config /home/swissquote/.config/service.toml
+    --config /home/swissquote/projects/swissquote/systemd/dev/service.toml
+EnvironmentFile=-/home/swissquote/.env
 
 Restart=on-failure
 RestartSec=5

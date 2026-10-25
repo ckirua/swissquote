@@ -9,11 +9,10 @@ apt-get update -qq
 apt-get install -y --no-install-recommends \
   cmake \
   g++ \
-  pkg-config \
-  libzmq3-dev \
   libssl-dev \
   curl \
   ca-certificates \
+  python3 \
   gettext-base \
   rsync
 

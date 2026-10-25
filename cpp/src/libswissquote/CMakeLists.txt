@@ -2,10 +2,9 @@ add_library(swissquote_lib STATIC
     codec/encode.cpp
     codec/decode.cpp
     codec/validate.cpp
-    zmq/spsc_ring.cpp
-    zmq/zmq_io.cpp
-    zmq/pub.cpp
-    zmq/sub.cpp
+    ipc/spsc_ring.cpp
+    ipc/unix_pub.cpp
+    ipc/unix_sub.cpp
     config/config.cpp
     net/http_client.cpp
     ingest/row_buffer.cpp
@@ -41,7 +40,6 @@ target_link_libraries(swissquote_lib
     PUBLIC
         spdlog::spdlog
     PRIVATE
-        ${ZMQ_LIBRARIES}
         tomlplusplus::tomlplusplus
 )
 
@@ -53,6 +51,5 @@ if(OpenSSL_FOUND)
     target_link_libraries(swissquote_lib PUBLIC OpenSSL::SSL OpenSSL::Crypto)
 endif()
 
-target_include_directories(swissquote_lib PRIVATE ${ZMQ_INCLUDE_DIRS})
 
 add_library(swissquote::lib ALIAS swissquote_lib)
