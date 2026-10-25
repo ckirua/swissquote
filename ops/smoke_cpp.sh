@@ -8,6 +8,24 @@
 # SWISSQUOTE_QUOTES_BASE_URL seam is pointed at the ephemeral local fixture.
 set -Eeuo pipefail
 
+PROFILE_DURATION=""
+if [[ "${1:-}" == "--profile" ]]; then
+  if [[ "$#" -ne 2 || ! "${2}" =~ ^[0-9]+$ ]] || (( ${#2} > 5 )) || (( 10#${2} < 1 || 10#${2} > 86400 )); then
+    echo "Usage: $0 [--profile DURATION_SECONDS (1-86400)]" >&2
+    exit 2
+  fi
+  PROFILE_DURATION=$((10#${2}))
+elif [[ "$#" -ne 0 ]]; then
+  echo "Usage: $0 [--profile DURATION_SECONDS (1-86400)]" >&2
+  exit 2
+fi
+PROFILE_MODE=0
+[[ -z "${PROFILE_DURATION}" ]] || PROFILE_MODE=1
+ARTIFACT_PREFIX="swissquote-smoke"
+if (( PROFILE_MODE )); then
+  ARTIFACT_PREFIX="swissquote-cpu-profile"
+fi
+
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 INSTALL_PREFIX="${INSTALL_PREFIX:-${HOME}/.local}"
 FEED_INSTALL="${INSTALL_PREFIX}/bin/swissquote-feed"
@@ -38,7 +56,10 @@ command -v python3 >/dev/null 2>&1 || {
   exit 1
 }
 
-TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/swissquote-smoke.XXXXXX")"
+TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/${ARTIFACT_PREFIX}.XXXXXX")"
+if (( PROFILE_MODE )); then
+  echo "Profile artifacts: ${TMP_DIR}"
+fi
 QUOTE_PORT_FILE="${TMP_DIR}/quote.port"
 CLICKHOUSE_PORT_FILE="${TMP_DIR}/clickhouse.port"
 CLICKHOUSE_DATA="${TMP_DIR}/clickhouse.tsv"
@@ -58,26 +79,48 @@ cleanup() {
   [[ -z "${FEED_PID}" ]] || wait "${FEED_PID}" 2>/dev/null || true
   [[ -z "${WRITER_PID}" ]] || wait "${WRITER_PID}" 2>/dev/null || true
   [[ -z "${FIXTURE_PID}" ]] || wait "${FIXTURE_PID}" 2>/dev/null || true
-  rm -rf "${TMP_DIR}"
+  if (( ! PROFILE_MODE )); then
+    rm -rf "${TMP_DIR}"
+  fi
 }
 trap cleanup EXIT
+if (( PROFILE_MODE )); then
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+fi
+
+if (( PROFILE_MODE )); then
+  mkdir -p "${TMP_DIR}/logs"
+fi
+LOG_LEVEL="DEBUG"
+BATCH_SIZE=1
+RECV_TIMEOUT_MS=100
+STARTUP_DELAY_SEC=0.0
+ASYNC_INSERT=false
+if (( PROFILE_MODE )); then
+  LOG_LEVEL="INFO"
+  BATCH_SIZE=5000
+  RECV_TIMEOUT_MS=1000
+  STARTUP_DELAY_SEC=0.5
+  ASYNC_INSERT=true
+fi
 
 cat >"${CONFIG}" <<EOF
 [ipc]
 socket_path = "${TMP_DIR}/feed.sock"
 
 [logging]
-level = "DEBUG"
+level = "${LOG_LEVEL}"
 log_dir = "${TMP_DIR}/logs"
 
 [writer]
-batch_size = 1
+batch_size = ${BATCH_SIZE}
 batch_interval_sec = 0.1
-recv_timeout_ms = 100
-startup_delay_sec = 0.0
+recv_timeout_ms = ${RECV_TIMEOUT_MS}
+startup_delay_sec = ${STARTUP_DELAY_SEC}
 ch_database = "swissquote"
 ch_table = "bbo"
-async_insert = false
+async_insert = ${ASYNC_INSERT}
 
 [feed]
 weekend_pause = false
@@ -193,7 +236,11 @@ CLICKHOUSE_HTTP_PORT="${CLICKHOUSE_PORT}" \
 DOTENV_PATH="${TMP_DIR}/missing.env" \
 "${WRITER_BIN}" --config "${CONFIG}" >"${WRITER_LOG}" 2>&1 &
 WRITER_PID=$!
-sleep 0.2
+if (( PROFILE_MODE )); then
+  sleep 1
+else
+  sleep 0.2
+fi
 if ! kill -0 "${WRITER_PID}" 2>/dev/null; then
   echo "ERROR: C++ writer exited before receiving a frame" >&2
   cat "${WRITER_LOG}" >&2 || true
@@ -261,11 +308,73 @@ then
   exit 1
 fi
 
-# Stop cleanly after the assertion; EXIT cleanup also covers failures.
+if (( PROFILE_MODE )); then
+  row_count_before="$(python3 - "${CLICKHOUSE_DATA}" <<'PY'
+import sys
+from pathlib import Path
+path = Path(sys.argv[1])
+print(sum(1 for line in path.read_text().splitlines() if len(line.split("\t")) == 9))
+PY
+)"
+  feed_drop_totals() {
+    python3 - "${FEED_LOG}" <<'PY'
+import re
+import sys
+from pathlib import Path
+matches = re.findall(
+    r"Unix IPC drops: queue=(\d+) no_client=(\d+) client=(\d+) send_errors=(\d+)",
+    Path(sys.argv[1]).read_text(),
+)
+print(" ".join(matches[-1]) if matches else "0 0 0 0")
+PY
+  }
+  feed_drops_before="$(feed_drop_totals)"
+  echo "Running sustained local fixture profile for ${PROFILE_DURATION}s (starting_rows=${row_count_before}, feed_drop_totals=${feed_drops_before})."
+  for ((elapsed = 0; elapsed < PROFILE_DURATION; elapsed++)); do
+    if ! kill -0 "${FEED_PID}" 2>/dev/null; then
+      echo "ERROR: C++ feed exited during profile run" >&2
+      exit 1
+    fi
+    if ! kill -0 "${WRITER_PID}" 2>/dev/null; then
+      echo "ERROR: C++ writer exited during profile run" >&2
+      exit 1
+    fi
+    if ! kill -0 "${FIXTURE_PID}" 2>/dev/null; then
+      echo "ERROR: local fixtures exited during profile run" >&2
+      exit 1
+    fi
+    sleep 1
+  done
+  feed_drops_after="$(feed_drop_totals)"
+  if [[ "${feed_drops_after}" != "${feed_drops_before}" ]]; then
+    echo "ERROR: feed drop/error counters changed during profile (before=${feed_drops_before}, after=${feed_drops_after})" >&2
+    exit 1
+  fi
+
+  row_count="$(python3 - "${CLICKHOUSE_DATA}" <<'PY'
+import sys
+from pathlib import Path
+path = Path(sys.argv[1])
+print(sum(1 for line in path.read_text().splitlines() if len(line.split("\t")) == 9))
+PY
+)"
+  if (( row_count <= row_count_before )); then
+    echo "ERROR: sustained profile did not grow ClickHouse fixture rows (before=${row_count_before}, after=${row_count})" >&2
+    exit 1
+  fi
+  if grep -Eiq 'recv_errors=[1-9][0-9]*|decode_errors=[1-9][0-9]*|failures=[1-9][0-9]*|flush failed|\[(error|critical)\]' "${WRITER_LOG}"; then
+    echo "ERROR: writer log reports receive, decode, or flush errors" >&2
+    exit 1
+  fi
+  echo "Profile passed: rows=${row_count} duration=${PROFILE_DURATION}s artifacts=${TMP_DIR}"
+else
+  echo "Smoke passed."
+fi
+
+# Stop cleanly; EXIT cleanup also covers failures and retains profile artifacts.
 kill "${FEED_PID}" 2>/dev/null || true
 kill "${WRITER_PID}" 2>/dev/null || true
 wait "${FEED_PID}" 2>/dev/null || true
 wait "${WRITER_PID}" 2>/dev/null || true
 FEED_PID=""
 WRITER_PID=""
-echo "Smoke passed."

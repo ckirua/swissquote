@@ -42,6 +42,11 @@ sudo bash ops/deploy.sh               # build → ~/.local/bin, dev systemd unit
 bash ops/smoke_cpp.sh                 # Unix IPC + decode smoke
 ```
 
+For a sustained isolated fixture run, use `ops/smoke_cpp.sh --profile SECONDS`.
+It verifies continued row growth and feed/writer health while retaining run
+artifacts under `/tmp/swissquote-cpu-profile.*`.
+
+
 | Unit | Binary |
 |------|--------|
 | `swissquote-feed.service` | `~/.local/bin/swissquote-feed` |
