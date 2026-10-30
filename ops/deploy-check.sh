@@ -46,8 +46,7 @@ check "systemd writer unit" "[[ -f '${SYSTEMD_WRITER_UNIT}' ]]"
 
 echo "==> Permissions"
 if [[ "${DEPLOY_MODE}" == "prod" ]]; then
-  check_private_dir "config directory" "${CONFIG_DIR}" "root"
-  check_private_dir "log directory" "${LOG_DIR}" "root"
+  check_production_config_dirs
 else
   check_private_dir "config directory" "${CONFIG_DIR}" "${SERVICE_USER}"
   check_private_dir "log directory" "${LOG_DIR}" "${SERVICE_USER}"
@@ -84,5 +83,9 @@ fi
 
 echo
 echo "Preflight failed. Fix permissions with:"
-echo "  bash ops/secure_permissions.sh"
+if [[ "${DEPLOY_MODE}" == "prod" ]]; then
+  echo "  sudo DEPLOY_MODE=prod bash ops/secure_permissions.sh"
+else
+  echo "  bash ops/secure_permissions.sh"
+fi
 exit 1
