@@ -95,9 +95,25 @@ sudo bash /opt/swissquote/ops/install/rollback.sh --restore
 | 8 | start services |
 | 9 | smoke + optional row-count check |
 
-Prod preflight after install: `DEPLOY_MODE=prod bash ops/deploy-check.sh`
+Read-only prod preflight after install:
+`sudo DEPLOY_MODE=prod AUTO_FIX=0 bash ops/deploy-check.sh`.
 
-Staging preflight: `DEPLOY_MODE=prod INSTALL_ROOT=/opt/swissquote-staging CONFIG_DIR=/etc/swissquote-staging bash ops/deploy-check.sh`
+Production directory policy (with `SERVICE_USER=swissquote` by default):
+
+| Path | Mode | Owner:group |
+| --- | --- | --- |
+| Install, config and state directories | `0750` | `root:swissquote` |
+| Log directory | `0750` | `swissquote:swissquote` |
+| Config and environment files | `0600` (`0400` also accepted by checks) | `swissquote:swissquote` |
+
+The service user must be able to traverse the config directory and create log
+files. Setup and preflight use the same policy, including directory group checks.
+Repair config/log directory and secret-file permissions without restarting:
+`sudo DEPLOY_MODE=prod bash ops/secure_permissions.sh`.
+Dev config/log directories remain service-user-owned `0700`.
+
+Staging preflight:
+`sudo DEPLOY_MODE=prod AUTO_FIX=0 INSTALL_ROOT=/opt/swissquote-staging CONFIG_DIR=/etc/swissquote-staging LOG_DIR=/var/log/swissquote-staging bash ops/deploy-check.sh`.
 
 Prod upgrades on an installed tree: `sudo bash /opt/swissquote/install.sh --from-epoch 4` (sync tree) or `--from-epoch 5` (rebuild only).
 

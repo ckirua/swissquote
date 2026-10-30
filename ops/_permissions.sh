@@ -80,6 +80,8 @@ check_private_dir() {
   local label="$1"
   local path="$2"
   local expected_owner="${3:-${SERVICE_USER}}"
+  local expected_mode="${4:-700}"
+  local expected_group="${5:-}"
 
   if [[ ! -d "${path}" ]]; then
     echo "FAIL ${label} (missing ${path})"
@@ -91,10 +93,10 @@ check_private_dir() {
   mode="$(stat -c '%a' "${path}")"
   owner="$(stat -c '%U' "${path}")"
 
-  if [[ "${mode}" == "700" ]]; then
+  if [[ "${mode}" == "${expected_mode}" ]]; then
     echo "ok  ${label} (mode ${mode})"
   else
-    echo "FAIL ${label} (mode ${mode}, expected 700)"
+    echo "FAIL ${label} (mode ${mode}, expected ${expected_mode})"
     PERMISSIONS_OK=false
   fi
 
@@ -104,6 +106,22 @@ check_private_dir() {
   else
     echo "ok  ${label} owner (${owner})"
   fi
+
+  if [[ -n "${expected_group}" ]]; then
+    local group
+    group="$(stat -c '%G' "${path}")"
+    if [[ "${group}" != "${expected_group}" ]]; then
+      echo "FAIL ${label} group (got ${group}, expected ${expected_group})"
+      PERMISSIONS_OK=false
+    else
+      echo "ok  ${label} group (${group})"
+    fi
+  fi
+}
+
+check_production_config_dirs() {
+  check_private_dir "config directory" "${CONFIG_DIR}" root 750 "${SERVICE_USER}"
+  check_private_dir "log directory" "${LOG_DIR}" "${SERVICE_USER}" 750 "${SERVICE_USER}"
 }
 
 check_clickhouse_secrets_in_config() {
@@ -131,11 +149,12 @@ apply_secure_permissions() {
     resolve_deploy_paths || return 1
     mkdir -p "${CONFIG_DIR}" "${LOG_DIR}"
     if [[ "${EUID}" -eq 0 ]]; then
-      install -d -m 750 -o root -g "${SERVICE_USER}" "${CONFIG_DIR}" "${LOG_DIR}"
+      install -d -m 750 -o root -g "${SERVICE_USER}" "${CONFIG_DIR}" || return 1
+      install -d -m 750 -o "${SERVICE_USER}" -g "${SERVICE_USER}" "${LOG_DIR}" || return 1
       [[ -f "${ENV_FILE}" ]] && chown "${SERVICE_USER}:${SERVICE_USER}" "${ENV_FILE}" && chmod 600 "${ENV_FILE}"
       [[ -f "${CONFIG}" ]] && chown "${SERVICE_USER}:${SERVICE_USER}" "${CONFIG}" && chmod 600 "${CONFIG}"
     else
-      chmod 750 "${CONFIG_DIR}" "${LOG_DIR}" 2>/dev/null || true
+      chmod 750 "${CONFIG_DIR}" "${LOG_DIR}" || return 1
       [[ -f "${ENV_FILE}" ]] && chmod 600 "${ENV_FILE}"
       [[ -f "${CONFIG}" ]] && chmod 600 "${CONFIG}"
     fi
