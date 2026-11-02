@@ -30,7 +30,7 @@ bool is_known_server(std::string_view server) {
 
 double metal_min_bid(std::string_view symbol) {
     if (symbol.starts_with("XAU/") || symbol.starts_with("XPD/") || symbol.starts_with("XPT/")) {
-        return 1000.0;
+        return 100.0;
     }
     if (symbol.starts_with("XAG/")) {
         return 1.0;

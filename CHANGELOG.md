@@ -27,6 +27,9 @@ All notable changes to the Swissquote C++26 engine and Python client follow
   the next publish so its full-size UDS case measures delivered frames rather
   than overwhelming the nonblocking publisher's slow-client policy.
 ### Fixed
+- Fix legitimate sub-`1000` palladium quotes being discarded by the C++ writer:
+  align its XAU/XPD/XPT minimum-bid guard with the Python client's `100` policy.
+  Keep FX-scale corruption checks and the silver threshold unchanged. See #8.
 - Align production permission setup and validation: root-owned config directories
   and service-owned writable log directories use `0750` with the service group.
   Preserve dev `0700` checks, validate production directory groups, and report
