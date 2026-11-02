@@ -130,6 +130,13 @@ frames each. Slot buffers grow lazily to frame size and are reused; startup
 does not reserve the theoretical 128 MiB maximum per ring. Under a full backlog
 of maximum-size frames, each ring can still grow to that bound.
 
+Decoded-row validation is shared in policy between the C++ writer and Python
+client. The metal-price corruption guard accepts bids of at least `100` for
+`XAU/`, `XPD/` and `XPT/`, and at least `1` for `XAG/` (in the quote currency).
+Sub-`1000` palladium quotes are not inherently invalid. These are corruption
+heuristics, not market-price guarantees; metadata, timestamp, positive-price
+and non-crossed-book checks still apply before rows enter a writer batch.
+
 The C++ writer uses ClickHouse **HTTP on port 8123** (set `CLICKHOUSE_HTTP_PORT` in env file).
 
 ## Environment variables
