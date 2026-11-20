@@ -16,6 +16,7 @@ render_unit() {
     -e "s|@SERVICE_USER@|${SERVICE_USER}|g" \
     -e "s|@FEED_UNIT@|${FEED_UNIT}|g" \
     -e "s|@RUN_DIRECTORY@|${RUN_DIRECTORY}|g" \
+    -e "s|@UNIT_SUFFIX@|${UNIT_SUFFIX}|g" \
     <"${template}" >"${dest}.tmp"
   install -m 644 "${dest}.tmp" "${dest}"
   rm -f "${dest}.tmp"
