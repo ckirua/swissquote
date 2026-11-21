@@ -132,12 +132,28 @@ else
   fi
 fi
 
+# Admin password: recoverable + idempotent. Persisted in ENV_FILE as
+# GRAFANA_ADMIN_PASSWORD; generated on first run. Applied via the cli (writes
+# the DB directly) with the server stopped to avoid SQLite lock contention.
+# Set GRAFANA_ADMIN_PASSWORD in ENV_FILE beforehand to choose the password.
+GRAFANA_ADMIN_PASSWORD="$(grep -E '^GRAFANA_ADMIN_PASSWORD=' "${ENV_FILE}" 2>/dev/null | head -n1 | cut -d= -f2- || true)"
+if [[ -z "${GRAFANA_ADMIN_PASSWORD}" ]]; then
+  GRAFANA_ADMIN_PASSWORD="$(openssl rand -base64 24 | tr -dc 'A-Za-z0-9' | cut -c1-24)"
+  if grep -q '^GRAFANA_ADMIN_PASSWORD=' "${ENV_FILE}"; then
+    sed -i "s/^GRAFANA_ADMIN_PASSWORD=.*/GRAFANA_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}/" "${ENV_FILE}"
+  else
+    printf 'GRAFANA_ADMIN_PASSWORD=%s\n' "${GRAFANA_ADMIN_PASSWORD}" >> "${ENV_FILE}"
+  fi
+fi
+systemctl stop grafana-server 2>/dev/null || true
+(cd /usr/share/grafana && grafana cli admin reset-admin-password "${GRAFANA_ADMIN_PASSWORD}")
 systemctl daemon-reload
 systemctl enable --now grafana-server
-systemctl restart grafana-server
 
 echo "Applied Swissquote Grafana provisioning."
 echo "  URL:  http://127.0.0.1:3000/"
+echo "  User: admin"
+echo "  Pass: ${GRAFANA_ADMIN_PASSWORD}"
 echo "  Env:  ${ENV_FILE}"
 echo "  DS:   /etc/grafana/provisioning/datasources/swissquote-clickhouse.yaml"
 echo "  Dash: /var/lib/grafana/dashboards/swissquote/"
