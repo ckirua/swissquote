@@ -10,6 +10,12 @@ All notable changes to the Swissquote C++26 engine and Python client follow
   feed-to-ClickHouse fixture with production-like writer settings and retains
   profile artifacts under `/tmp`.
 - Daily ClickHouse-to-S3 Parquet archive for Swissquote BBO, scheduled at 06:00 UTC.
+- `grafana/apply-provisioning.sh` now provisions a recoverable Grafana admin
+  password: generated on first run, persisted as `GRAFANA_ADMIN_PASSWORD` in the
+  env file, and applied idempotently via `grafana cli admin reset-admin-password`
+  (set `GRAFANA_ADMIN_PASSWORD` in the env file beforehand to choose it).
+- `ops/get_ch_password.sh` and `ops/get_grafana_password.sh` print the
+  ClickHouse / Grafana passwords from their 0600 env files (run as root).
 
 ### Changed
 - Production C++ codec now uses the generated SBE headers from `sbe/generated/` for frame encoding and decoding; wire layout and compatibility tests remain unchanged.
